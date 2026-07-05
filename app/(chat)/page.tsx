@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -98,6 +98,24 @@ function TextWithCitations({
 export default function ChatPage() {
   const [input, setInput] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [corpusDate, setCorpusDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/status")
+      .then((res) => res.json())
+      .then((status: { syncedAt: string | null; pages: number }) => {
+        if (status.syncedAt && status.pages > 0) {
+          setCorpusDate(
+            new Date(status.syncedAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
   });
@@ -114,7 +132,9 @@ export default function ChatPage() {
     <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between border-b px-4 py-3">
         <h1 className="font-semibold">Browserbase Navigator</h1>
-        <span className="text-muted-foreground text-xs">corpus as of —</span>
+        <span className="text-muted-foreground text-xs">
+          {corpusDate ? `corpus as of ${corpusDate}` : "corpus syncing…"}
+        </span>
       </header>
 
       <div className="flex min-h-0 flex-1">

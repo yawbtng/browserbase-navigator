@@ -11,7 +11,7 @@ import { z } from "zod";
 import { savePlan } from "@/lib/plans";
 import { checkRateLimit, requestIp } from "@/lib/rate-limit";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
-import { getPage, recentChanges, searchWiki } from "@/lib/tools";
+import { getPage, grepWiki, recentChanges, searchWiki } from "@/lib/tools";
 
 export const maxDuration = 60;
 
@@ -77,6 +77,20 @@ export async function POST(req: Request) {
             .describe("Optional source filter, e.g. 'stagehand'"),
         }),
         execute: ({ query, source }) => searchWiki(query, source),
+      }),
+      grep_wiki: tool({
+        description:
+          "Regex/exact-match search over the wiki corpus (case-insensitive POSIX regex). Use for identifiers, method names, error messages, flags, version numbers — anywhere the exact string matters more than meaning. Complements search_wiki (semantic).",
+        inputSchema: z.object({
+          pattern: z
+            .string()
+            .describe("Case-insensitive regex, e.g. 'keepAlive' or 'REQUEST_RELEASE'"),
+          source: z
+            .string()
+            .optional()
+            .describe("Optional source filter, e.g. 'stagehand'"),
+        }),
+        execute: ({ pattern, source }) => grepWiki(pattern, source),
       }),
       get_page: tool({
         description:

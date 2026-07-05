@@ -50,6 +50,48 @@ export async function searchWiki(
   }
 }
 
+/**
+ * Exact/pattern match over the corpus — the complement to semantic search.
+ * Embeddings whiff on identifiers (keepAlive, REQUEST_RELEASE, error strings,
+ * version numbers); a regex scan over the chunk store nails them. The chunks
+ * table doubles as the wiki filesystem, so this is "grep the wiki" without
+ * needing files at runtime.
+ */
+export async function grepWiki(
+  pattern: string,
+  source?: string,
+): Promise<WikiSearchResult[] | ToolError> {
+  try {
+    const rows = await sql()`
+      select c.source_url, c.heading, c.content, p.title, p.source
+      from chunks c join pages p on p.source_url = c.source_url
+      where c.content ~* ${pattern}
+        and (${source ?? null}::text is null or p.source = ${source ?? null})
+      order by c.source_url, c.chunk_index
+      limit 12`;
+    return rows.map((r) => {
+      const content = r.content as string;
+      let at = 0;
+      try {
+        at = Math.max(0, content.search(new RegExp(pattern, "i")));
+      } catch {
+        at = 0;
+      }
+      const start = Math.max(0, at - 200);
+      return {
+        url: r.source_url as string,
+        title: (r.title as string | null) ?? null,
+        source: r.source as string,
+        heading: (r.heading as string | null) ?? null,
+        snippet: content.slice(start, start + 1000),
+        similarity: 1,
+      };
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function getPage(sourceUrl: string): Promise<WikiPage | ToolError> {
   try {
     const pages = await sql()`

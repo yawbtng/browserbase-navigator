@@ -16,6 +16,8 @@ interface GoldenCase {
   question: string;
   /** Substrings that must appear in the streamed response (URLs, verdict words). */
   expect: string[];
+  /** Pattern that must NOT appear (e.g. a hallucinated out-of-corpus fact). */
+  reject?: RegExp;
 }
 
 const GOLDEN: GoldenCase[] = [
@@ -48,8 +50,10 @@ const GOLDEN: GoldenCase[] = [
   {
     name: "6. corpus-miss honesty (out-of-corpus question)",
     question: "What is the seat pitch on a Boeing 787-9 in economy class?",
-    // Must refuse rather than hallucinate; any of these signals honesty.
-    expect: ["corpus"],
+    // Refusals mention the assistant's scope; the real check is below —
+    // it must NOT produce an actual seat-pitch figure.
+    expect: ["browserbase"],
+    reject: /\b3[0-4]\s*(inches|in\b|")/i,
   },
 ];
 
@@ -80,6 +84,9 @@ describe.skipIf(!BASE)("golden questions", () => {
       const answer = (await askNavigator(c.question)).toLowerCase();
       for (const needle of c.expect) {
         expect(answer).toContain(needle.toLowerCase());
+      }
+      if (c.reject) {
+        expect(answer).not.toMatch(c.reject);
       }
     });
   }

@@ -17,6 +17,24 @@ export const maxDuration = 60;
 
 const MODEL = process.env.AI_MODEL ?? "anthropic/claude-haiku-4-5";
 
+// The six real source values in the index — schema-enforced so the model
+// can't invent a filter (live failure: it passed "browse.sh" for "browse-sh"
+// and every tool silently returned []).
+const SOURCES = [
+  "docs-browserbase",
+  "docs-stagehand",
+  "browse-sh",
+  "marketing",
+  "github",
+  "changelog",
+] as const;
+const sourceFilter = z
+  .enum(SOURCES)
+  .optional()
+  .describe(
+    "Optional source filter: docs-browserbase (platform docs), docs-stagehand, browse-sh (skills), marketing (browserbase.com pages), github (READMEs/releases), changelog",
+  );
+
 // Abuse controls (plan Phase 5): caps are generous for real use, hostile to bulk.
 const CHAT_LIMIT_PER_HOUR = 30;
 const PLAN_LIMIT_PER_DAY = 10;
@@ -68,13 +86,10 @@ export async function POST(req: Request) {
     tools: {
       search_wiki: tool({
         description:
-          "Search the Browserbase ecosystem wiki index for pages relevant to a query. Optionally filter by source (e.g. 'stagehand', 'browserbase-docs', 'mcp-server').",
+          "Semantic search over the Browserbase ecosystem wiki index. Prefer NO source filter unless certain — an over-narrow filter hides results.",
         inputSchema: z.object({
           query: z.string().describe("Search query"),
-          source: z
-            .string()
-            .optional()
-            .describe("Optional source filter, e.g. 'stagehand'"),
+          source: sourceFilter,
         }),
         execute: ({ query, source }) => searchWiki(query, source),
       }),
@@ -85,10 +100,7 @@ export async function POST(req: Request) {
           pattern: z
             .string()
             .describe("Case-insensitive regex, e.g. 'keepAlive' or 'REQUEST_RELEASE'"),
-          source: z
-            .string()
-            .optional()
-            .describe("Optional source filter, e.g. 'stagehand'"),
+          source: sourceFilter,
         }),
         execute: ({ pattern, source }) => grepWiki(pattern, source),
       }),

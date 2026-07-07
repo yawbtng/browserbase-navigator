@@ -9,13 +9,6 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import {
-  InlineCitation,
-  InlineCitationCard,
-  InlineCitationCardBody,
-  InlineCitationCardTrigger,
-  InlineCitationSource,
-} from "@/components/ai-elements/inline-citation";
-import {
   Message,
   MessageContent,
   MessageResponse,
@@ -42,6 +35,7 @@ import {
 } from "@/components/navigator/related-questions";
 import {
   type CitedSource,
+  parseSources,
   SourceCards,
 } from "@/components/navigator/source-cards";
 import { StalenessPill } from "@/components/navigator/staleness-pill";
@@ -60,33 +54,16 @@ function TextWithCitations({
   text: string;
   sources: CitedSource[];
 }) {
-  if (sources.length === 0) {
-    return <MessageResponse>{text}</MessageResponse>;
-  }
-
-  return (
-    <p className="whitespace-pre-wrap leading-relaxed">
-      {text.split(/(\[\d+\])/).map((segment, i) => {
-        const marker = segment.match(/^\[(\d+)\]$/);
-        const source = marker ? sources[Number(marker[1]) - 1] : undefined;
-
-        if (!source) {
-          return <span key={i}>{segment}</span>;
-        }
-
-        return (
-          <InlineCitation key={i}>
-            <InlineCitationCard>
-              <InlineCitationCardTrigger sources={[source.url]} />
-              <InlineCitationCardBody className="p-3">
-                <InlineCitationSource title={source.title} url={source.url} />
-              </InlineCitationCardBody>
-            </InlineCitationCard>
-          </InlineCitation>
-        );
-      })}
-    </p>
-  );
+  // Keep the full markdown pipeline and turn [n] markers into links to the
+  // cited page — never fall back to plain text (raw markdown is unreadable).
+  const linked =
+    sources.length === 0
+      ? text
+      : text.replace(/\[(\d+)\]/g, (marker, n: string) => {
+          const source = sources[Number(n) - 1];
+          return source ? `[${marker}](${source.url})` : marker;
+        });
+  return <MessageResponse>{linked}</MessageResponse>;
 }
 
 export default function ChatPage() {
@@ -154,10 +131,11 @@ export default function ChatPage() {
               {messages.map((message) => {
                 const isAssistant = message.role === "assistant";
 
-                const sources: CitedSource[] = message.parts.flatMap((part) =>
-                  part.type === "source-url"
-                    ? [{ url: part.url, title: part.title ?? part.url }]
-                    : []
+                const providerSources: CitedSource[] = message.parts.flatMap(
+                  (part) =>
+                    part.type === "source-url"
+                      ? [{ url: part.url, title: part.title ?? part.url }]
+                      : []
                 );
 
                 const toolParts = message.parts.filter((part) =>
@@ -169,9 +147,17 @@ export default function ChatPage() {
                   .map((part) => (part.type === "text" ? part.text : ""))
                   .join("");
 
-                const { body, questions } = isAssistant
+                const { body: afterQuestions, questions } = isAssistant
                   ? parseKeepExploring(textContent)
                   : { body: textContent, questions: [] };
+                // Model-emitted "### Sources" section carries the citation
+                // data (provider source-url parts never arrive from
+                // tool-grounded answers); fall back to provider parts.
+                const { body, sources: parsedSources } = isAssistant
+                  ? parseSources(afterQuestions)
+                  : { body: afterQuestions, sources: [] };
+                const sources =
+                  parsedSources.length > 0 ? parsedSources : providerSources;
 
                 return (
                   <div key={message.id}>

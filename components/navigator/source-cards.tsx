@@ -110,3 +110,36 @@ export function SourceCards({
     </div>
   );
 }
+
+/**
+ * Parse the model-emitted "### Sources" section ([n]: URL — Title per line).
+ * Provider source-url parts never arrive from tool-grounded answers, so this
+ * section IS the citation data; the UI strips it and renders cards instead.
+ */
+export function parseSources(text: string): {
+  body: string;
+  sources: CitedSource[];
+} {
+  const re = /\n#{2,4}\s*Sources\s*\n([\s\S]*?)(?=\n#{2,4}\s|$)/i;
+  const m = text.match(re);
+  if (!m) {
+    return { body: text, sources: [] };
+  }
+  const sources: CitedSource[] = [];
+  for (const line of m[1].split("\n")) {
+    const lm = line.match(
+      /\[(\d+)\]:?\s*<?(https?:\/\/[^\s>]+)>?(?:\s*[—–-]\s*(.+))?\s*$/,
+    );
+    if (lm) {
+      sources[Number(lm[1]) - 1] = {
+        url: lm[2],
+        title: lm[3]?.trim() || lm[2],
+      };
+    }
+  }
+  const filtered = sources.filter(Boolean);
+  if (filtered.length === 0) {
+    return { body: text, sources: [] };
+  }
+  return { body: text.replace(re, "\n").trimEnd(), sources: filtered };
+}

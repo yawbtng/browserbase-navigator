@@ -210,3 +210,18 @@
     }
   }
 }
+
+/* Docs-assistant-style code blocks (user calibration 2026-07-07): ONE hairline
+   container, not nested boxes. Streamdown wraps pre in two bordered divs —
+   collapse the outer, keep a single flat surface. */
+div.bg-sidebar:has(pre) {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+div[class*="language-"]:has(> pre) {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+}

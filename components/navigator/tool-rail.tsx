@@ -129,7 +129,9 @@ function ToolStep({ part, index }: { part: ToolPart; index: number }) {
   return (
     <motion.div
       animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-      className="rounded-sharp border border-border bg-surface-2"
+      // Flat rows, docs-Assistant style — the mono badge carries the texture,
+      // not a box (user calibration 2026-07-07: "a lot of borders").
+      className="rounded-sharp"
       initial={
         reduceMotion ? false : { opacity: 0, scale: 0.96, filter: "blur(4px)" }
       }

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPlan } from "@/lib/plans";
+import { PlanHeader } from "./plan-header";
 import { PlanMarkdown } from "./plan-markdown";
 
 // Plans are immutable snapshots reachable only by unguessable slug —
@@ -8,6 +10,33 @@ import { PlanMarkdown } from "./plan-markdown";
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
+
+// The article body has no typography plugin to lean on (no `prose` classes
+// are registered in this project), so the markdown read-experience is built
+// directly on DNA tokens via arbitrary-variant descendant selectors — same
+// pattern as the `[&_pre]` code-block treatment in ai-elements/message.tsx.
+const articleClassName = [
+  "mt-10 max-w-none text-sm leading-relaxed text-text",
+  "[&_h1]:mt-10 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-medium [&_h1]:tracking-[-0.01em] [&_h1]:text-text first:[&_h1]:mt-0",
+  "[&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-medium [&_h2]:tracking-[-0.01em] [&_h2]:text-text",
+  "[&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:text-base [&_h3]:font-medium [&_h3]:text-text",
+  "[&_h4]:mt-6 [&_h4]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:uppercase [&_h4]:tracking-[0.08em] [&_h4]:text-text-muted",
+  "[&_p]:my-4 [&_p]:leading-relaxed [&_p]:text-text",
+  "[&_a]:text-brand-text [&_a]:underline [&_a]:underline-offset-2 [&_a]:transition-colors [&_a]:duration-200 [&_a]:ease-brand hover:[&_a]:text-brand-hover",
+  "[&_strong]:font-semibold [&_strong]:text-text",
+  "[&_em]:italic",
+  "[&_ul]:my-4 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5",
+  "[&_ol]:my-4 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5",
+  "[&_li]:text-text [&_li]:leading-relaxed [&_li_p]:my-0",
+  "[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:text-text-muted [&_blockquote]:italic",
+  "[&_hr]:my-8 [&_hr]:border-border",
+  "[&_code]:rounded-sm [&_code]:border [&_code]:border-border [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.8125rem] [&_code]:text-text",
+  "[&_pre]:overflow-x-auto [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0",
+  "[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm",
+  "[&_th]:border [&_th]:border-border [&_th]:bg-surface-2 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_th]:text-text",
+  "[&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-2 [&_td]:text-text-muted",
+  "print:text-[13px]",
+].join(" ");
 
 export default async function PlanPage({
   params,
@@ -19,24 +48,48 @@ export default async function PlanPage({
   if (!plan) notFound();
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
-      <header className="mb-8 border-b pb-4">
-        <p className="text-muted-foreground text-xs">
-          Saved plan · {new Date(plan.createdAt).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}{" "}
-          · immutable snapshot from{" "}
-          <a className="underline underline-offset-2" href="/">
-            Browserbase Navigator
-          </a>
-        </p>
-        <h1 className="mt-2 font-semibold text-2xl">{plan.title}</h1>
-      </header>
-      <article className="prose prose-neutral dark:prose-invert max-w-none">
-        <PlanMarkdown content={plan.content} />
-      </article>
-    </main>
+    <>
+      {/* Screen = whatever theme the visitor has; print always forces the
+          light token block (DNA §9 — reviewers screenshot/print these).
+          `html:root` (specificity 0,1,1) beats globals.css's plain `:root`
+          and `.light` rules (0,1,0) regardless of stylesheet order, so this
+          wins without touching globals.css. Only the raw tokens are
+          overridden — every shadcn var derived via var(--bg) etc. cascades
+          through automatically. */}
+      <style>{`
+        @media print {
+          html:root {
+            color-scheme: light;
+            --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F7F5F2; --surface-accent:#E2E9F3; --surface-sunken:#F4F1EC;
+            --border:#E7E1D6; --border-strong:#D6CFC2; --border-brand:#FF4500;
+            --text:#260F17; --text-muted:#575150; --text-subtle:#777170;
+            --brand:#FF4500; --brand-hover:#E63E00; --brand-pressed:#CC3700;
+            --brand-fg:#FFFFFF; --brand-fg-strong:#1A0A00; --brand-text:#C43700;
+            --brand-glow:rgba(255,69,0,0.22); --brand-pulse:rgba(255,69,0,0.08);
+            --success:#71AC38; --success-fg:#4E7A24; --success-tint:rgba(113,172,56,.14);
+            --warning:#F4BA41; --warning-fg:#8A5A00; --warning-tint:rgba(244,186,65,.20);
+            --error:#CE1F02; --error-fg:#CE1F02; --error-tint:rgba(206,31,2,.10);
+            --info:#2D7FB8; --info-fg:#1E6091; --info-tint:rgba(45,127,184,.12);
+            --neutral:#A5A09E; --neutral-fg:#777170; --neutral-tint:rgba(120,113,108,.10);
+            --scrim:rgba(244,241,236,0.72);
+            --highlight:#C5D3E8;
+          }
+        }
+      `}</style>
+      <main className="mx-auto max-w-3xl px-6 py-12 print:max-w-none print:px-0">
+        <PlanHeader plan={plan} />
+        <article className={articleClassName}>
+          <PlanMarkdown content={plan.content} />
+        </article>
+        <footer className="mt-16 border-t border-border pt-6 print:hidden">
+          <Link
+            href="/"
+            className="eyebrow transition-colors duration-200 ease-brand hover:text-text"
+          >
+            Generated by Browserbase Navigator
+          </Link>
+        </footer>
+      </main>
+    </>
   );
 }

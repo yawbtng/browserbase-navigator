@@ -42,7 +42,10 @@ export const InlineCitationText = ({
   ...props
 }: InlineCitationTextProps) => (
   <span
-    className={cn("transition-colors group-hover:bg-accent", className)}
+    className={cn(
+      "transition-colors duration-200 ease-brand group-hover:bg-surface-2",
+      className
+    )}
     {...props}
   />
 );
@@ -64,8 +67,11 @@ export const InlineCitationCardTrigger = ({
 }: InlineCitationCardTriggerProps) => (
   <HoverCardTrigger asChild>
     <Badge
-      className={cn("ml-1 rounded-full", className)}
-      variant="secondary"
+      className={cn(
+        "ml-0.5 -translate-y-[3px] rounded-pill border border-border-brand/40 bg-transparent px-1.5 py-0 font-mono text-[10px] font-medium leading-4 text-brand-text transition-[background-color,border-radius] duration-200 ease-brand hover:rounded-lg hover:bg-brand-pulse",
+        className
+      )}
+      variant="outline"
       {...props}
     >
       {sources[0] ? (
@@ -86,7 +92,10 @@ export const InlineCitationCardBody = ({
   className,
   ...props
 }: InlineCitationCardBodyProps) => (
-  <HoverCardContent className={cn("relative w-80 p-0", className)} {...props} />
+  <HoverCardContent
+    className={cn("relative w-80 rounded-sharp p-0", className)}
+    {...props}
+  />
 );
 
 const CarouselApiContext = createContext<CarouselApi | undefined>(undefined);

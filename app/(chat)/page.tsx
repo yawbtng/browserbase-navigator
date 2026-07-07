@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import {
@@ -28,32 +27,27 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
-import { Shimmer } from "@/components/ai-elements/shimmer";
-import {
-  Source,
-  Sources,
-  SourcesContent,
-  SourcesTrigger,
-} from "@/components/ai-elements/sources";
 import {
   WebPreview,
   WebPreviewBody,
   WebPreviewNavigation,
-  WebPreviewUrl,
 } from "@/components/ai-elements/web-preview";
-
-interface CitedSource {
-  url: string;
-  title: string;
-}
-
-function domainOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
+import { BrowserChrome } from "@/components/navigator/browser-chrome";
+import { Hero } from "@/components/navigator/hero";
+import { BrowserbaseMark } from "@/components/navigator/logo";
+import { MessageActions } from "@/components/navigator/message-actions";
+import {
+  parseKeepExploring,
+  RelatedQuestions,
+} from "@/components/navigator/related-questions";
+import {
+  type CitedSource,
+  SourceCards,
+} from "@/components/navigator/source-cards";
+import { StalenessPill } from "@/components/navigator/staleness-pill";
+import { ThemeToggle } from "@/components/navigator/theme-toggle";
+import { DotBounce } from "@/components/navigator/thinking";
+import { ToolRail, type ToolPart } from "@/components/navigator/tool-rail";
 
 /**
  * Renders assistant text, wrapping [n] markers in InlineCitation hover cards.
@@ -116,6 +110,7 @@ export default function ChatPage() {
       })
       .catch(() => {});
   }, []);
+
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
   });
@@ -128,134 +123,135 @@ export default function ChatPage() {
     setInput("");
   };
 
+  const isEmpty = messages.length === 0;
+
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <h1 className="font-semibold">Browserbase Navigator</h1>
-        <span className="text-muted-foreground text-xs">
-          {corpusDate ? `corpus as of ${corpusDate}` : "corpus syncing…"}
-        </span>
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4 shadow-inset-top">
+        <div className="flex items-center gap-2.5">
+          <BrowserbaseMark className="size-5 shrink-0" />
+          <span className="text-sm font-medium tracking-[-0.01em] text-text">
+            Browserbase <span className="text-text-muted">Navigator</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <StalenessPill corpusDate={corpusDate} />
+          <ThemeToggle />
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
+          {isEmpty ? (
+            // Hero lives OUTSIDE Conversation: its stick-to-bottom behavior
+            // would open the page scrolled past the headline.
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <Hero onPick={(q) => sendMessage({ text: q })} />
+            </div>
+          ) : (
           <Conversation>
             <ConversationContent className="mx-auto w-full max-w-3xl">
-              {messages.length === 0 && (
-                <ConversationEmptyState
-                  title="Ask about the Browserbase ecosystem"
-                  description="Stagehand, the browse CLI, MCP server, Functions, Agents — answers come with citations."
-                />
-              )}
               {messages.map((message) => {
+                const isAssistant = message.role === "assistant";
+
                 const sources: CitedSource[] = message.parts.flatMap((part) =>
                   part.type === "source-url"
                     ? [{ url: part.url, title: part.title ?? part.url }]
                     : []
                 );
 
+                const toolParts = message.parts.filter((part) =>
+                  part.type.startsWith("tool-")
+                ) as unknown as ToolPart[];
+
+                const textContent = message.parts
+                  .filter((part) => part.type === "text")
+                  .map((part) => (part.type === "text" ? part.text : ""))
+                  .join("");
+
+                const { body, questions } = isAssistant
+                  ? parseKeepExploring(textContent)
+                  : { body: textContent, questions: [] };
+
                 return (
                   <div key={message.id}>
-                    {message.role === "assistant" && sources.length > 0 && (
-                      <Sources>
-                        <SourcesTrigger count={sources.length} />
-                        <SourcesContent>
-                          {sources.map((source, i) => (
-                            <Source
-                              href={source.url}
-                              key={`${source.url}-${i}`}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setPreviewUrl(source.url);
-                              }}
-                              title={source.title}
-                            >
-                              <span className="bg-muted hover:bg-accent inline-flex max-w-full items-center gap-1 truncate rounded-full border px-2 py-0.5 text-xs">
-                                <span className="font-medium">[{i + 1}]</span>
-                                <span>{domainOf(source.url)}</span>
-                                <span className="text-muted-foreground truncate">
-                                  {source.title}
-                                </span>
-                              </span>
-                            </Source>
-                          ))}
-                        </SourcesContent>
-                      </Sources>
+                    {isAssistant && <ToolRail parts={toolParts} />}
+                    {isAssistant && (
+                      <SourceCards onOpen={setPreviewUrl} sources={sources} />
                     )}
                     <Message from={message.role}>
                       <MessageContent>
-                        {message.parts.map((part, i) =>
-                          part.type === "text" ? (
-                            <TextWithCitations
-                              key={`${message.id}-${i}`}
-                              sources={sources}
-                              text={part.text}
-                            />
-                          ) : null
+                        {isAssistant ? (
+                          <TextWithCitations sources={sources} text={body} />
+                        ) : (
+                          <TextWithCitations sources={[]} text={textContent} />
                         )}
                       </MessageContent>
+                      {isAssistant && body.length > 0 && (
+                        <>
+                          <RelatedQuestions
+                            onAsk={(question) =>
+                              sendMessage({ text: question })
+                            }
+                            questions={questions}
+                          />
+                          <MessageActions
+                            answer={body}
+                            onSaveAsPlan={() =>
+                              sendMessage({ text: "Save this as a plan" })
+                            }
+                          />
+                        </>
+                      )}
                     </Message>
                   </div>
                 );
               })}
-              {status === "submitted" && <Shimmer>Thinking…</Shimmer>}
+
+              {status === "submitted" && <DotBounce />}
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
+          )}
 
-          <div className="mx-auto w-full max-w-3xl p-4">
-            <PromptInput onSubmit={handleSubmit}>
-              <PromptInputBody>
-                <PromptInputTextarea
-                  onChange={(e) => setInput(e.currentTarget.value)}
-                  placeholder="Ask about Browserbase, Stagehand, the browse CLI…"
-                  value={input}
-                />
-                <PromptInputSubmit
-                  className="absolute right-2 bottom-2"
-                  disabled={!input.trim()}
-                  status={status}
-                />
-              </PromptInputBody>
-            </PromptInput>
+          <div className="shrink-0 border-t border-border bg-bg">
+            <div className="mx-auto w-full max-w-3xl px-6 py-4">
+              <PromptInput onSubmit={handleSubmit}>
+                <PromptInputBody>
+                  <PromptInputTextarea
+                    className="min-h-13 px-4 py-3.5 pr-14 leading-normal"
+                    onChange={(e) => setInput(e.currentTarget.value)}
+                    placeholder="Ask about Stagehand, the browse CLI, MCP server…"
+                    value={input}
+                  />
+                  <PromptInputSubmit
+                    className="absolute right-2 bottom-2"
+                    disabled={!input.trim()}
+                    status={status}
+                  />
+                </PromptInputBody>
+              </PromptInput>
+            </div>
           </div>
         </div>
 
         {previewUrl && (
-          <aside className="hidden w-[26rem] shrink-0 flex-col border-l md:flex">
-            <div className="flex items-center justify-between gap-2 border-b px-3 py-2 text-xs">
-              <span className="text-muted-foreground">Source preview</span>
-              <span className="flex items-center gap-3">
-                <a
-                  className="underline underline-offset-2"
-                  href={previewUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open ↗
-                </a>
-                <button
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={() => setPreviewUrl(null)}
-                  type="button"
-                >
-                  Close
-                </button>
-              </span>
-            </div>
+          <aside className="hidden w-[26rem] shrink-0 flex-col border-l border-border md:flex">
             <WebPreview
               className="flex-1 rounded-none border-0"
               defaultUrl={previewUrl}
               key={previewUrl}
             >
               <WebPreviewNavigation>
-                <WebPreviewUrl />
+                <BrowserChrome
+                  onClose={() => setPreviewUrl(null)}
+                  url={previewUrl}
+                />
               </WebPreviewNavigation>
               <WebPreviewBody src={previewUrl} />
             </WebPreview>
-            <p className="text-muted-foreground border-t px-3 py-2 text-xs">
-              Blank panel? The site likely blocks embedding — use “Open ↗”
-              instead.
+            <p className="border-t border-border px-3 py-2 text-xs text-text-muted">
+              Blank frame means the site blocks embedding. Use Open ↗.
             </p>
           </aside>
         )}

@@ -78,7 +78,7 @@ export const WebPreview = ({
     <WebPreviewContext.Provider value={contextValue}>
       <div
         className={cn(
-          "flex size-full flex-col rounded-lg border bg-card",
+          "flex size-full flex-col rounded-lg border border-border bg-surface shadow-inset-top",
           className
         )}
         {...props}
@@ -97,7 +97,10 @@ export const WebPreviewNavigation = ({
   ...props
 }: WebPreviewNavigationProps) => (
   <div
-    className={cn("flex items-center gap-1 border-b p-2", className)}
+    className={cn(
+      "flex h-10 items-center gap-3 border-b border-border bg-surface-2 px-3",
+      className
+    )}
     {...props}
   >
     {children}
@@ -172,7 +175,7 @@ export const WebPreviewUrl = ({
 
   return (
     <Input
-      className="h-8 flex-1 text-sm"
+      className="h-8 flex-1 font-mono text-[11px] text-text-muted"
       onChange={onChange ?? handleChange}
       onKeyDown={handleKeyDown}
       placeholder="Enter URL..."
@@ -227,14 +230,17 @@ export const WebPreviewConsole = ({
 
   return (
     <Collapsible
-      className={cn("border-t bg-muted/50 font-mono text-sm", className)}
+      className={cn(
+        "rounded-sharp border-t border-border bg-surface-2 font-mono text-sm",
+        className
+      )}
       onOpenChange={setConsoleOpen}
       open={consoleOpen}
       {...props}
     >
       <CollapsibleTrigger asChild>
         <Button
-          className="flex w-full items-center justify-between p-4 text-left font-medium hover:bg-muted/50"
+          className="flex w-full items-center justify-between p-4 text-left font-medium hover:bg-surface-2"
           variant="ghost"
         >
           Console
@@ -261,7 +267,7 @@ export const WebPreviewConsole = ({
                 className={cn(
                   "text-xs",
                   log.level === "error" && "text-destructive",
-                  log.level === "warn" && "text-yellow-600",
+                  log.level === "warn" && "text-warning-fg",
                   log.level === "log" && "text-foreground"
                 )}
                 key={`${log.timestamp.getTime()}-${log.level}-${log.message}`}

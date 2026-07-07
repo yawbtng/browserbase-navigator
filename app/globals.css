@@ -2,9 +2,13 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Dark is the default now (DNA §7): :root paints dark with zero JS, .light is the opt-in override.
+   We no longer use `dark:` variants anywhere — the token layer does theming. A `light:` variant is
+   available for the rare component that must special-case the light theme. */
+@custom-variant light (&:is(.light *));
 
 @theme inline {
+  /* ---- existing shadcn mappings (unchanged) ---- */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
@@ -28,7 +32,7 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
+  --color-accent: var(--accent);                  /* NEUTRAL hover surface, not brand orange */
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -39,6 +43,52 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* ---- DNA: brand family (disambiguated from shadcn --accent) ---- */
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-pressed: var(--brand-pressed);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-fg-strong: var(--brand-fg-strong);
+  --color-brand-text: var(--brand-text);
+  --color-brand-glow: var(--brand-glow);
+  --color-brand-pulse: var(--brand-pulse);
+  --color-border-brand: var(--border-brand);
+
+  /* ---- DNA: surfaces + text tiers ---- */
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-accent: var(--surface-accent);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+
+  /* ---- DNA: status ---- */
+  --color-success: var(--success);
+  --color-success-fg: var(--success-fg);
+  --color-success-tint: var(--success-tint);
+  --color-warning: var(--warning);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-tint: var(--warning-tint);
+  --color-error: var(--error);
+  --color-error-fg: var(--error-fg);
+  --color-error-tint: var(--error-tint);
+  --color-info: var(--info);
+  --color-info-fg: var(--info-fg);
+  --color-info-tint: var(--info-tint);
+
+  /* ---- DNA: macOS traffic lights ---- */
+  --color-wc-red: var(--wc-red);
+  --color-wc-yellow: var(--wc-yellow);
+  --color-wc-green: var(--wc-green);
+
+  /* ---- DNA: motion + depth ---- */
+  --ease-brand: var(--ease);
+  --shadow-inset-top: inset 0 1px 0 0 var(--highlight);
+
+  /* ---- radii (existing scale kept) + bimodal pill/sharp (DNA §4) ---- */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,75 +96,85 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-pill: 999px;
+  --radius-sharp: 0px;
 }
 
+/* Dark default — :root always matches, so SSR/no-JS renders dark correctly. */
 :root {
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  color-scheme: dark;
+
+  /* raw DNA tokens (dark) — flattened to match docs.browserbase.com's dark
+     surface: near-black canvas, cards barely lighter than the canvas, hairline
+     borders carrying the structure (user calibration vs live docs, 2026-07-07). */
+  --bg:#0A0908; --surface:#121110; --surface-2:#1A1817; --surface-accent:#171310; --surface-sunken:#070605;
+  --border:#272321; --border-strong:#3B3531; --border-brand:#FF4500;
+  --text:#F5F3F0; --text-muted:#A8A29E; --text-subtle:#8A827B;
+  --brand:#FF4500; --brand-hover:#FF6A33; --brand-pressed:#E63E00;
+  --brand-fg:#FFFFFF; --brand-fg-strong:#1A0A00; --brand-text:#FF7A45;
+  --brand-glow:rgba(255,69,0,0.35); --brand-pulse:rgba(255,69,0,0.10);
+  --success:#71AC38; --success-fg:#8FD24E; --success-tint:rgba(113,172,56,.16);
+  --warning:#F4BA41; --warning-fg:#F4BA41; --warning-tint:rgba(244,186,65,.16);
+  --error:#E5484D;   --error-fg:#FF8A8A;   --error-tint:rgba(229,72,77,.16);
+  --info:#4DA9E4;    --info-fg:#7BC4F0;    --info-tint:rgba(77,169,228,.16);
+  --neutral:#78716C; --neutral-fg:#A8A29E; --neutral-tint:rgba(120,113,108,.16);
+  --scrim:rgba(12,10,9,0.72);           /* overlay bg — never opacity-modify a hex token */
+  --highlight:rgba(245,243,240,0.06);   /* inset top hairline */
+  --wc-red:#FF5F57; --wc-yellow:#FEBC2E; --wc-green:#28C840;
+  --ease:cubic-bezier(0.3,0,0.15,1);
+
+  /* shadcn vars remapped onto DNA (defined once; .light only overrides the raw tokens above,
+     so these resolve per-theme automatically) */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--text);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-fg-strong);   /* AA: near-black on orange, NOT white */
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--surface-2);                      /* neutral hover surface, NOT brand */
+  --accent-foreground: var(--text);
+  --destructive: var(--error);
+  --border: var(--border);
+  --input: var(--surface-2);
+  --ring: var(--brand);
+  --chart-1: var(--brand); --chart-2: var(--info); --chart-3: var(--success);
+  --chart-4: var(--warning); --chart-5: var(--text-muted);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--text);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-fg-strong);
+  --sidebar-accent: var(--surface-2);
+  --sidebar-accent-foreground: var(--text);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--brand);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+.light {
+  color-scheme: light;
+  /* only the raw DNA tokens flip; every shadcn var above cascades through var(--bg) etc.
+     Canvas is WHITE, not cream — browserbase.com's actual light canvas (user call 2026-07-07);
+     hairline borders carry the card structure. Warm tints survive in surface-2/sunken. */
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F7F5F2; --surface-accent:#E2E9F3; --surface-sunken:#F4F1EC;
+  --border:#E7E1D6; --border-strong:#D6CFC2; --border-brand:#FF4500;
+  --text:#260F17; --text-muted:#575150; --text-subtle:#777170;
+  --brand:#FF4500; --brand-hover:#E63E00; --brand-pressed:#CC3700;
+  --brand-fg:#FFFFFF; --brand-fg-strong:#1A0A00; --brand-text:#C43700;
+  --brand-glow:rgba(255,69,0,0.22); --brand-pulse:rgba(255,69,0,0.08);
+  --success:#71AC38; --success-fg:#4E7A24; --success-tint:rgba(113,172,56,.14);
+  --warning:#F4BA41; --warning-fg:#8A5A00; --warning-tint:rgba(244,186,65,.20);
+  --error:#CE1F02;   --error-fg:#CE1F02;   --error-tint:rgba(206,31,2,.10);
+  --info:#2D7FB8;    --info-fg:#1E6091;    --info-tint:rgba(45,127,184,.12);
+  --neutral:#A5A09E; --neutral-fg:#777170; --neutral-tint:rgba(120,113,108,.10);
+  --scrim:rgba(244,241,236,0.72);
+  --highlight:#C5D3E8;                   /* periwinkle inset highlight */
 }
 
 @layer base {
@@ -126,5 +186,27 @@
   }
   html {
     @apply font-sans;
+  }
+
+  /* Mono uppercase eyebrow — DNA §3/§8 */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;      /* 11px */
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Global reduced-motion kill switch — DNA §5. Covers Framer/Radix/Tailwind entrances + Shimmer loop. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

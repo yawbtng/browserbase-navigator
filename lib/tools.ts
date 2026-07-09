@@ -35,8 +35,19 @@ export async function searchWiki(
 ): Promise<WikiSearchResult[] | ToolError> {
   try {
     const embedding = await embedQuery(query);
-    const rows = await sql()`
-      select * from search_chunks(${embedding}::vector, 8, ${source ?? null})`;
+    // Over-fetch then cap chunks-per-page: cosine order loves returning four
+    // near-identical chunks of one page, which starves the evidence set
+    // (seen live: 4× marketing /stagehand for a Stagehand-vs-Agents query).
+    const raw = await sql()`
+      select * from search_chunks(${embedding}::vector, 24, ${source ?? null})`;
+    const perUrl = new Map<string, number>();
+    const rows = raw
+      .filter((r) => {
+        const n = perUrl.get(r.source_url as string) ?? 0;
+        perUrl.set(r.source_url as string, n + 1);
+        return n < 2;
+      })
+      .slice(0, 8);
     return rows.map((r) => ({
       url: r.source_url as string,
       title: (r.title as string | null) ?? null,

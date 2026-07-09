@@ -16,6 +16,11 @@ export async function checkRateLimit(
   limit: number,
   windowMinutes: number,
 ): Promise<RateLimitResult> {
+  // Local dev + eval loops burn the hourly budget in minutes; limits are a
+  // prod concern (verified live 2026-07-05).
+  if (process.env.NODE_ENV === "development") {
+    return { allowed: true, remaining: limit };
+  }
   const rows = await sql()`
     with pruned as (
       delete from rate_events

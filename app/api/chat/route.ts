@@ -80,8 +80,21 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: MODEL,
-    system: SYSTEM_PROMPT,
-    messages: await convertToModelMessages(messages),
+    // System prompt rides in the messages array so it can carry an Anthropic
+    // cache breakpoint — multi-step turns re-send it up to 8 times otherwise.
+    // (The breakpoint covers tools + system, which clears Haiku's 2048-token
+    // minimum cacheable prefix; the system prompt alone would not.)
+    allowSystemInMessages: true,
+    messages: [
+      {
+        role: "system" as const,
+        content: SYSTEM_PROMPT,
+        providerOptions: {
+          anthropic: { cacheControl: { type: "ephemeral" } },
+        },
+      },
+      ...(await convertToModelMessages(messages)),
+    ],
     stopWhen: stepCountIs(8),
     tools: {
       search_wiki: tool({

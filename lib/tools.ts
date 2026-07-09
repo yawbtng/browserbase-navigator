@@ -2,7 +2,7 @@
  * The navigator's three knowledge tools, backed by the wiki index (Neon).
  * Citation contract: every passage/page returned includes its upstream URL.
  */
-import { embedQuery, sql } from "./wiki";
+import { embedQuery, rerankDocs, sql } from "./wiki";
 
 export interface WikiSearchResult {
   url: string;
@@ -41,13 +41,25 @@ export async function searchWiki(
     const raw = await sql()`
       select * from search_chunks(${embedding}::vector, 24, ${source ?? null})`;
     const perUrl = new Map<string, number>();
-    const rows = raw
-      .filter((r) => {
-        const n = perUrl.get(r.source_url as string) ?? 0;
-        perUrl.set(r.source_url as string, n + 1);
-        return n < 2;
-      })
-      .slice(0, 8);
+    const capped = raw.filter((r) => {
+      const n = perUrl.get(r.source_url as string) ?? 0;
+      perUrl.set(r.source_url as string, n + 1);
+      return n < 2;
+    });
+    // Cross-encoder rerank picks the best 8 of the (deduped) 24 cosine
+    // candidates — cosine retrieves, the reranker decides. Fails open to
+    // cosine order.
+    const order = await rerankDocs(
+      query,
+      capped.map(
+        (r) =>
+          `${(r.title as string) ?? ""} ${(r.heading as string) ?? ""}\n${(r.content as string).slice(0, 600)}`,
+      ),
+      8,
+    );
+    const rows = order
+      ? order.map((i) => capped[i]).filter(Boolean)
+      : capped.slice(0, 8);
     return rows.map((r) => ({
       url: r.source_url as string,
       title: (r.title as string | null) ?? null,

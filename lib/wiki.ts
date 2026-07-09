@@ -19,6 +19,43 @@ export function sql(): ReturnType<typeof postgres> {
   return client;
 }
 
+/**
+ * Rerank documents against a query (voyage/rerank-2.5-lite via the Gateway,
+ * ~$0.02/M tokens). Returns candidate indices, most relevant first. Fails
+ * open with null — callers fall back to their own ordering.
+ */
+export async function rerankDocs(
+  query: string,
+  documents: string[],
+  topN: number,
+): Promise<number[] | null> {
+  const key = process.env.AI_GATEWAY_API_KEY;
+  if (!key || documents.length === 0) return null;
+  try {
+    const res = await fetch("https://ai-gateway.vercel.sh/v1/rerank", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${key}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.RERANK_MODEL ?? "voyage/rerank-2.5-lite",
+        query,
+        documents,
+        top_n: topN,
+      }),
+      signal: AbortSignal.timeout(4_000),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      results: Array<{ index: number; relevance_score: number }>;
+    };
+    return json.results.map((r) => r.index);
+  } catch {
+    return null;
+  }
+}
+
 // Per-instance memo: the hero's example questions arrive verbatim from many
 // visitors, and eager-retrieval + a model's own search_wiki call often embed
 // the same text twice in one request. Bounded; a warm lambda keeps it.

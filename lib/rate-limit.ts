@@ -28,7 +28,11 @@ export async function checkRateLimit(
   if (used >= limit) {
     return { allowed: false, remaining: 0 };
   }
-  await sql()`insert into rate_events (ip, kind) values (${ip}, ${kind})`;
+  // Fire-and-forget: the insert doesn't gate this request, and the streaming
+  // response keeps the function alive long enough for it to flush.
+  sql()`insert into rate_events (ip, kind) values (${ip}, ${kind})`.catch(
+    () => {},
+  );
   return { allowed: true, remaining: limit - used - 1 };
 }
 

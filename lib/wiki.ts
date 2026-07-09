@@ -19,7 +19,15 @@ export function sql(): ReturnType<typeof postgres> {
   return client;
 }
 
+// Per-instance memo: the hero's example questions arrive verbatim from many
+// visitors, and eager-retrieval + a model's own search_wiki call often embed
+// the same text twice in one request. Bounded; a warm lambda keeps it.
+const embedCache = new Map<string, string>();
+const EMBED_CACHE_MAX = 256;
+
 export async function embedQuery(text: string): Promise<string> {
+  const cached = embedCache.get(text);
+  if (cached) return cached;
   const key = process.env.AI_GATEWAY_API_KEY;
   if (!key) throw new Error("AI_GATEWAY_API_KEY not configured");
   const res = await fetch("https://ai-gateway.vercel.sh/v1/embeddings", {
@@ -35,5 +43,11 @@ export async function embedQuery(text: string): Promise<string> {
   const json = (await res.json()) as { data: Array<{ embedding: number[] }> };
   const vector = json.data[0]?.embedding;
   if (!vector) throw new Error("no embedding returned");
-  return `[${vector.join(",")}]`; // pgvector literal
+  const literal = `[${vector.join(",")}]`; // pgvector literal
+  if (embedCache.size >= EMBED_CACHE_MAX) {
+    const oldest = embedCache.keys().next().value;
+    if (oldest !== undefined) embedCache.delete(oldest);
+  }
+  embedCache.set(text, literal);
+  return literal;
 }

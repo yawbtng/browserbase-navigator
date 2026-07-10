@@ -1,8 +1,14 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import { Check, ChevronDown } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import {
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+  ChainOfThoughtSearchResult,
+  ChainOfThoughtSearchResults,
+  ChainOfThoughtStep,
+} from "@/components/ai-elements/chain-of-thought";
+import { Check } from "lucide-react";
 import { useState } from "react";
 import { domainOf } from "./icons";
 
@@ -25,10 +31,15 @@ const BADGES: Record<string, string> = {
   get_page: "READ",
   recent_changes: "CHANGES",
   save_plan: "SAVE",
+  deep_research: "RESEARCH",
 };
 
 function toolName(type: string): string {
   return type.replace(/^tool-/, "");
+}
+
+function isRunning(part: ToolPart): boolean {
+  return part.state === "input-streaming" || part.state === "input-available";
 }
 
 function asArray(output: unknown): unknown[] | null {
@@ -55,6 +66,10 @@ function inputSummary(name: string, input: Record<string, unknown> = {}): string
       return `last ${input.days ?? 30}d`;
     case "save_plan":
       return String(input.title ?? "");
+    case "deep_research":
+      return Array.isArray(input.domains)
+        ? `${input.domains.length} sub-agents: ${(input.domains as string[]).join(", ")}`
+        : "";
     default:
       return "";
   }
@@ -74,6 +89,13 @@ function resultSummary(name: string, output: unknown): string {
       return `${n} entries`;
     case "save_plan":
       return "saved";
+    case "deep_research": {
+      const briefs =
+        output && typeof output === "object" && "briefs" in output
+          ? (output as { briefs: unknown[] }).briefs
+          : null;
+      return Array.isArray(briefs) ? `${briefs.length} briefs` : "done";
+    }
     default:
       return arr ? `${n} results` : "done";
   }
@@ -101,131 +123,114 @@ function detailTitles(output: unknown): string[] {
     .filter(Boolean);
 }
 
-function ToolStep({ part, index }: { part: ToolPart; index: number }) {
-  const [open, setOpen] = useState(false);
-  // The global CSS reduced-motion rule doesn't govern Framer's JS engine.
-  const reduceMotion = useReducedMotion();
+function ToolStep({ part }: { part: ToolPart }) {
   const name = toolName(part.type);
   const badge = BADGES[name] ?? name.toUpperCase();
   const summary = inputSummary(name, part.input);
 
-  const running =
-    part.state === "input-streaming" || part.state === "input-available";
+  const running = isRunning(part);
   const errText =
     part.state === "output-error"
       ? part.errorText ?? "failed"
       : outputError(part.output);
 
-  const saveUrl =
-    name === "save_plan" &&
-    part.output &&
-    typeof part.output === "object" &&
-    "url" in part.output
-      ? String((part.output as { url: unknown }).url)
-      : null;
-
   const titles = detailTitles(part.output);
 
   return (
-    <motion.div
-      animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-      // Flat rows, docs-Assistant style — the mono badge carries the texture,
-      // not a box (user calibration 2026-07-07: "a lot of borders").
-      className="rounded-sharp"
-      initial={
-        reduceMotion ? false : { opacity: 0, scale: 0.96, filter: "blur(4px)" }
-      }
-      transition={{ duration: 0.22, delay: index * 0.04, ease: [0.3, 0, 0.15, 1] }}
-    >
-      <div className="flex items-center gap-2 px-3 py-2">
-        <span className="eyebrow rounded-sharp bg-surface px-1.5 py-0.5 text-text-muted">
-          {badge}
-        </span>
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-muted">
-          {summary}
-        </span>
-
-        {running && (
-          <span className="flex items-center gap-1.5 text-text-subtle">
-            <i className="size-1.5 animate-pulse rounded-full bg-brand" />
+    <ChainOfThoughtStep
+      label={
+        <span className="flex items-center gap-2">
+          <span className="eyebrow rounded-sharp bg-surface px-1.5 py-0.5 text-text-muted">
+            {badge}
           </span>
-        )}
-
-        {errText && (
-          <span className="truncate font-mono text-xs text-error-fg">
-            {errText}
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-muted">
+            {summary}
           </span>
-        )}
 
-        {!(running || errText) && (
-          <span className="flex items-center gap-1.5">
-            {saveUrl ? (
-              <a
-                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg font-mono text-xs text-brand-text underline-offset-2 hover:underline"
-                href={saveUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                permalink
-              </a>
-            ) : (
+          {running && (
+            <i className="size-1.5 shrink-0 animate-pulse rounded-full bg-brand" />
+          )}
+
+          {errText && (
+            <span className="truncate font-mono text-xs text-error-fg">
+              {errText}
+            </span>
+          )}
+
+          {!(running || errText) && (
+            <span className="flex shrink-0 items-center gap-1.5">
               <span className="whitespace-nowrap font-mono text-xs text-text">
                 {resultSummary(name, part.output)}
               </span>
-            )}
-            <Check aria-hidden className="size-3.5 text-success" />
-          </span>
-        )}
-
-        {titles.length > 0 && (
-          <button
-            aria-label={open ? "Hide details" : "Show details"}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg text-text-subtle transition-transform duration-200 ease-brand hover:text-text-muted"
-            onClick={() => setOpen((v) => !v)}
-            type="button"
-          >
-            <ChevronDown
-              className={cn("size-3.5", open && "rotate-180")}
-            />
-          </button>
-        )}
-      </div>
-
-      {open && titles.length > 0 && (
-        <ul className="flex flex-col gap-1 border-t border-border px-3 py-2">
+              <Check aria-hidden className="size-3.5 text-success" />
+            </span>
+          )}
+        </span>
+      }
+      status={running ? "active" : "complete"}
+    >
+      {titles.length > 0 && (
+        <ChainOfThoughtSearchResults>
           {titles.map((title, i) => (
-            <li
-              className="truncate font-mono text-[11px] text-text-muted"
-              key={i}
-            >
+            <ChainOfThoughtSearchResult key={i}>
               {title}
-            </li>
+            </ChainOfThoughtSearchResult>
           ))}
-        </ul>
+        </ChainOfThoughtSearchResults>
       )}
-    </motion.div>
+    </ChainOfThoughtStep>
   );
 }
 
 /**
- * Morphic pattern #2 — tool-activity step rail. Renders typed tool parts as
- * sharp-radius rows with a mono badge, input summary, and (on output) a result
- * count. Rows resolve top-down with blurScaleIn; global reduced-motion gates it.
+ * Operator step rail rebuilt on the AI Elements chain-of-thought: streams
+ * tool activity live (mono badge + input + result note per step), then
+ * collapses automatically once the answer starts streaming — unless the
+ * user has toggled it, in which case their choice wins. Wraps TOOL
+ * activity only; the model emits no reasoning tokens.
  */
-export function ToolRail({ parts }: { parts: ToolPart[] }) {
+export function ToolRail({
+  parts,
+  answerStarted,
+}: {
+  parts: ToolPart[];
+  answerStarted: boolean;
+}) {
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const open = userOpen ?? !answerStarted;
+
   if (parts.length === 0) {
     return null;
   }
 
+  const running = parts.some(isRunning);
+  const current = running ? [...parts].reverse().find(isRunning) : undefined;
+
   return (
-    <div className="mb-3 flex flex-col gap-1.5">
-      {parts.map((part, index) => (
-        <ToolStep
-          index={index}
-          key={part.toolCallId ?? `${part.type}-${index}`}
-          part={part}
-        />
-      ))}
-    </div>
+    <ChainOfThought className="mb-3" onOpenChange={setUserOpen} open={open}>
+      <ChainOfThoughtHeader>
+        {current ? (
+          <>
+            <i className="size-1.5 shrink-0 animate-pulse rounded-full bg-brand" />
+            <span className="eyebrow rounded-sharp bg-surface px-1.5 py-0.5 text-text-muted">
+              {BADGES[toolName(current.type)] ??
+                toolName(current.type).toUpperCase()}
+            </span>
+            <span className="min-w-0 truncate font-mono text-xs text-text-muted">
+              {inputSummary(toolName(current.type), current.input)}
+            </span>
+          </>
+        ) : (
+          <span className="eyebrow">
+            {parts.length} step{parts.length === 1 ? "" : "s"}
+          </span>
+        )}
+      </ChainOfThoughtHeader>
+      <ChainOfThoughtContent>
+        {parts.map((part, index) => (
+          <ToolStep key={part.toolCallId ?? `${part.type}-${index}`} part={part} />
+        ))}
+      </ChainOfThoughtContent>
+    </ChainOfThought>
   );
 }

@@ -11,31 +11,42 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// The article body has no typography plugin to lean on (no `prose` classes
-// are registered in this project), so the markdown read-experience is built
-// directly on DNA tokens via arbitrary-variant descendant selectors — same
-// pattern as the `[&_pre]` code-block treatment in ai-elements/message.tsx.
+// MessageResponse (the chat's Streamdown wrapper) owns the reading rhythm —
+// 15px/leading-7 with real paragraph/list margins — so the article layer only
+// adds document-scale hierarchy plus "fills, not borders" overrides where
+// Streamdown's defaults still lean on resting borders. Descendant arbitrary
+// variants (`.article-class el` = 0,1,1) reliably beat Streamdown's own
+// element classes (0,1,0), so no `!important` is needed anywhere.
 const articleClassName = [
-  "mt-10 max-w-none text-sm leading-relaxed text-text",
+  "mt-10 max-w-none text-text",
+  // Document heading scale (a plan reads as an article, not a chat bubble).
   "[&_h1]:mt-10 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-medium [&_h1]:tracking-[-0.01em] [&_h1]:text-text first:[&_h1]:mt-0",
-  "[&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-medium [&_h2]:tracking-[-0.01em] [&_h2]:text-text",
-  "[&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:text-base [&_h3]:font-medium [&_h3]:text-text",
+  "[&_h2]:text-xl [&_h2]:font-medium [&_h2]:tracking-[-0.01em] [&_h2]:text-text",
+  "[&_h3]:text-base [&_h3]:font-medium [&_h3]:text-text",
   "[&_h4]:mt-6 [&_h4]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:uppercase [&_h4]:tracking-[0.08em] [&_h4]:text-text-muted",
-  "[&_p]:my-4 [&_p]:leading-relaxed [&_p]:text-text",
   "[&_a]:text-brand-text [&_a]:underline [&_a]:underline-offset-2 [&_a]:transition-colors [&_a]:duration-200 [&_a]:ease-brand hover:[&_a]:text-brand-hover",
   "[&_strong]:font-semibold [&_strong]:text-text",
-  "[&_em]:italic",
-  "[&_ul]:my-4 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5",
-  "[&_ol]:my-4 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5",
-  "[&_li]:text-text [&_li]:leading-relaxed [&_li_p]:my-0",
-  "[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:text-text-muted [&_blockquote]:italic",
+  // Streamdown puts list-disc/list-decimal on ul/ol, but those classes live
+  // in node_modules where Tailwind never scans — without these rules lists
+  // render marker-less. (Spacing still comes from MessageResponse.)
+  "[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li_p]:my-0",
+  // Fills over borders: blockquote is a quiet surface, not a left rule.
+  "[&_blockquote]:my-5 [&_blockquote]:rounded-md [&_blockquote]:border-0 [&_blockquote]:bg-surface-2 [&_blockquote]:px-4 [&_blockquote]:py-3 [&_blockquote]:text-text-muted [&_blockquote]:italic",
   "[&_hr]:my-8 [&_hr]:border-border",
-  "[&_code]:rounded-sm [&_code]:border [&_code]:border-border [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.8125rem] [&_code]:text-text",
-  "[&_pre]:overflow-x-auto [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0",
-  "[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm",
-  "[&_th]:border [&_th]:border-border [&_th]:bg-surface-2 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_th]:text-text",
-  "[&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-2 [&_td]:text-text-muted",
-  "print:text-[13px]",
+  // Inline code: fill only — drop Streamdown's text-sm for a size that sits
+  // inside 15px body text without jumping.
+  "[&_code]:rounded-sm [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.8125rem] [&_code]:text-text",
+  "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
+  // Tables: Streamdown nests the table in two bordered boxes and we can't
+  // touch its source — collapse both wrappers here (same move globals.css
+  // makes for `pre`) so the header fill + row hairlines carry the structure.
+  "[&_div.bg-sidebar:has(table)]:border-0 [&_div.bg-sidebar:has(table)]:bg-transparent [&_div.bg-sidebar:has(table)]:p-0",
+  "[&_div:has(>table)]:rounded-none [&_div:has(>table)]:border-0 [&_div:has(>table)]:bg-transparent",
+  "[&_thead]:bg-surface-2 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_th]:text-text",
+  "[&_td]:px-3 [&_td]:py-2 [&_td]:text-text-muted",
+  // Streamdown's copy/download toolbars are UI chrome — not for paper.
+  // (`div:has(>button)` also drops the empty bordered group the buttons sit in.)
+  "print:[&_button]:hidden print:[&_div:has(>button)]:hidden print:text-[13px]",
 ].join(" ");
 
 export default async function PlanPage({
@@ -81,7 +92,9 @@ export default async function PlanPage({
         <article className={articleClassName}>
           <PlanMarkdown content={plan.content} />
         </article>
-        <footer className="mt-16 border-t border-border pt-6 print:hidden">
+        {/* No border-t: the header separator is the page's one hairline —
+            the footer reads as quiet trailing space (fills-not-borders). */}
+        <footer className="mt-16 print:hidden">
           <Link
             href="/"
             className="eyebrow transition-colors duration-200 ease-brand hover:text-text"

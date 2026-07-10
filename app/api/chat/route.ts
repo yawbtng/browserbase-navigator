@@ -11,6 +11,7 @@ import { z } from "zod";
 import { savePlan } from "@/lib/plans";
 import { checkRateLimit, requestIp } from "@/lib/rate-limit";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
+import { RESEARCH_DOMAIN_KEYS, runDeepResearch } from "@/lib/research";
 import {
   getPage,
   grepWiki,
@@ -21,13 +22,19 @@ import {
 
 export const maxDuration = 60;
 
-// Benchmarked 2026-07-09 (6 models × tool-grounded questions + golden evals):
-// gemini-2.5-flash was 4-7s and ~3x cheaper but flaked on the citation
-// contract (~60-70% per eval case: [product map] markers, one-sided
-// comparison grounding) even at temperature 0.2 with prompt hardening.
-// flash-lite returned an empty answer; gpt-4.1-mini dropped Sources.
-// haiku-4.5 held the contract 100% — with the eager evidence pack it no
-// longer pays the tool roundtrip that made it slow.
+// ANSWER MODEL — chosen by bake-off, not brand. 12 models benchmarked
+// 2026-07-09 on tool-grounded questions; finalists ran the full golden
+// suite. Fastest/cheapest failures, for the record:
+//   grok-4.1-fast-non-reasoning: 2.5s turns, but 2/6 evals — hallucinated a
+//     seat-pitch figure from memory and dressed it with a citation.
+//   amazon/nova-lite: 3/6. gemini-2.5-flash: retested AFTER the reranker
+//     fix, still emits [product map]-style markers (~60-70%/case).
+//   kimi-k2.7-code 0/2 on both-sides grounding; qwen3.5-flash bad markers;
+//   gpt-4o-mini one-sided; gpt-5-nano 21s thinking; glm slow; llama-4 and
+//   morph no tool support; grok-4.20-multi-agent gated.
+// haiku-4.5 is the only tested model at 6/6 (×2 runs). Fast models live in
+// lib/research.ts as sub-agents instead, where briefs are re-grounded by
+// this model before anything reaches the user.
 const MODEL = process.env.AI_MODEL ?? "anthropic/claude-haiku-4.5";
 
 // The six real source values in the index — schema-enforced so the model
@@ -227,6 +234,27 @@ export async function POST(req: Request) {
           sourceUrl: z.string().describe("Upstream URL of the indexed page"),
         }),
         execute: ({ sourceUrl }) => getPage(sourceUrl),
+      }),
+      deep_research: tool({
+        description:
+          "Fan out parallel retrieval sub-agents, each specialized in one slice of the ecosystem, and get back per-domain briefs with citable URLs. Use ONLY for broad or multi-part questions — comprehensive overviews, comparisons spanning 3+ products, migration/architecture plans, 'tell me everything about X'. For simple lookups use search_wiki/grep_wiki instead (they are much faster).",
+        inputSchema: z.object({
+          question: z
+            .string()
+            .describe("Self-contained research question for the sub-agents"),
+          domains: z
+            .array(z.enum(RESEARCH_DOMAIN_KEYS as [string, ...string[]]))
+            .min(1)
+            .max(3)
+            .describe(
+              "Which ecosystem slices to research in parallel (max 3): platform, stagehand, skills, marketing, news",
+            ),
+        }),
+        execute: ({ question, domains }) =>
+          runDeepResearch(
+            question,
+            domains as Parameters<typeof runDeepResearch>[1],
+          ),
       }),
       recent_changes: tool({
         description:

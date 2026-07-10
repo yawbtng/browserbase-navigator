@@ -18,7 +18,7 @@ export function ExampleCard({
 
   return (
     <button
-      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg group flex flex-col items-start gap-2 rounded-lg border border-border bg-surface p-5 text-left shadow-inset-top transition-[color,border-color] duration-200 ease-brand hover:border-border-brand"
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg group flex flex-col items-start gap-2 rounded-lg border border-transparent bg-surface p-5 text-left shadow-inset-top transition-[color,border-color] duration-200 ease-brand hover:border-border-brand light:border-border"
       onClick={() => onPick(q.prompt)}
       type="button"
     >

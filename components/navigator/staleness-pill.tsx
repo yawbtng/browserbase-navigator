@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  */
 export function StalenessPill({ corpusDate }: { corpusDate: string | null }) {
   return (
-    <span className="eyebrow inline-flex items-center gap-2 rounded-sharp border border-border bg-surface px-2.5 py-1">
+    <span className="eyebrow inline-flex items-center gap-2 rounded-sharp border border-transparent bg-surface-2 px-2.5 py-1 light:border-border light:bg-surface">
       <i
         aria-hidden
         className={cn(

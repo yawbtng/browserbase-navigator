@@ -38,7 +38,7 @@ export function CategoryRail({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg rounded-pill px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,border-radius] duration-200 ease-brand hover:rounded-lg",
               active
                 ? "bg-brand text-brand-fg-strong"
-                : "border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text"
+                : "border border-transparent bg-surface-2 text-text-muted hover:border-border-strong hover:text-text light:border-border light:bg-surface"
             )}
             key={option}
             onClick={() => onChange(option)}

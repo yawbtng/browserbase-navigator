@@ -110,9 +110,11 @@
      borders carrying the structure (user calibration vs live docs, 2026-07-07). */
   --bg:#0A0908; --surface:#121110; --surface-2:#1A1817; --surface-accent:#171310; --surface-sunken:#070605;
   /* Alpha borders (Linear/Vercel dark idiom): barely-there hairlines that
-     read as structure, not as lines — user: dark borders were too strong. */
-  --border:rgba(245,243,240,0.07); --border-strong:rgba(245,243,240,0.14); --border-brand:#FF4500;
-  --text:#F5F3F0; --text-muted:#A8A29E; --text-subtle:#8A827B;
+     read as structure, not as lines — user: dark borders were too strong.
+     2026-07-09 vercel/chatbot pass: hairlines are hover/structural-only now
+     (fills carry hierarchy), so both tiers dropped further. */
+  --border:rgba(245,243,240,0.05); --border-strong:rgba(245,243,240,0.10); --border-brand:#FF4500;
+  --text:#ECEAE8; --text-muted:#A8A29E; --text-subtle:#8A827B;
   --brand:#FF4500; --brand-hover:#FF6A33; --brand-pressed:#E63E00;
   --brand-fg:#FFFFFF; --brand-fg-strong:#1A0A00; --brand-text:#FF7A45;
   --brand-glow:rgba(255,69,0,0.35); --brand-pulse:rgba(255,69,0,0.10);
@@ -143,7 +145,10 @@
   --accent: var(--surface-2);                      /* neutral hover surface, NOT brand */
   --accent-foreground: var(--text);
   --destructive: var(--error);
-  --border: var(--border);
+  /* NOTE: no `--border: var(--border)` remap here — self-reference makes the
+     property guaranteed-invalid, so every dark border-border fell back to
+     currentColor (bright text-colored lines). The raw DNA token above IS the
+     shadcn --border. (root-caused 2026-07-09) */
   --input: var(--surface-2);
   --ring: var(--brand);
   --chart-1: var(--brand); --chart-2: var(--info); --chart-3: var(--success);

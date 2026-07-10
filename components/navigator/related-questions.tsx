@@ -60,7 +60,7 @@ export function RelatedQuestions({
       <div className="flex flex-col items-start gap-2">
         {questions.map((question) => (
           <button
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg group inline-flex items-center gap-2 rounded-pill border border-border bg-surface px-3 py-1.5 text-left text-sm text-text transition-[color,border-color,border-radius] duration-200 ease-brand hover:rounded-lg hover:border-border-strong"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg group inline-flex items-center gap-2 rounded-pill border border-transparent bg-surface-2 px-3 py-1.5 text-left text-sm text-text transition-[color,border-color,border-radius] duration-200 ease-brand hover:rounded-lg hover:border-border-strong light:border-border light:bg-surface"
             key={question}
             onClick={() => onAsk(question)}
             type="button"

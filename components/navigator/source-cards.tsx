@@ -45,7 +45,7 @@ function SourceCard({
 
   return (
     <button
-      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg flex w-44 shrink-0 flex-col gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-left shadow-inset-top transition-colors duration-200 ease-brand hover:border-border-strong"
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg flex w-44 shrink-0 flex-col gap-1.5 rounded-lg border border-transparent bg-surface-2 px-3 py-2 text-left shadow-inset-top transition-colors duration-200 ease-brand hover:border-border-strong light:border-border light:bg-surface"
       onClick={() => onOpen(source.url)}
       type="button"
     >
@@ -99,7 +99,7 @@ export function SourceCards({
         ))}
         {!expanded && overflow > 0 && (
           <button
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg eyebrow flex w-20 shrink-0 items-center justify-center rounded-lg border border-border bg-surface px-3 py-2 text-text-muted shadow-inset-top transition-colors duration-200 ease-brand hover:border-border-strong hover:text-text"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg eyebrow flex w-20 shrink-0 items-center justify-center rounded-lg border border-transparent bg-surface-2 px-3 py-2 text-text-muted shadow-inset-top transition-colors duration-200 ease-brand hover:border-border-strong hover:text-text light:border-border light:bg-surface"
             onClick={() => setExpanded(true)}
             type="button"
           >

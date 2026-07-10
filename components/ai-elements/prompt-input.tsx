@@ -921,7 +921,12 @@ export const PromptInput = ({
         ref={formRef}
         {...props}
       >
-        <InputGroup className="overflow-hidden">{children}</InputGroup>
+        {/* Dark (vercel/chatbot idiom): the composer is a rounded surface-2
+            fill with NO resting border — definition comes from fill contrast
+            + the focus ring. Light keeps its calibrated bordered field. */}
+        <InputGroup className="overflow-hidden border-transparent bg-surface-2 dark:bg-surface-2 light:border-input light:bg-transparent light:dark:bg-input/30">
+          {children}
+        </InputGroup>
       </form>
     </>
   );

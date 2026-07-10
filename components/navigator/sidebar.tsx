@@ -51,7 +51,7 @@ function ChatItem({
           "flex w-full flex-col gap-0.5 rounded-md border px-2.5 py-2 pr-9 text-left transition-colors duration-200 ease-brand",
           FOCUS_RING,
           active
-            ? "border-border bg-surface"
+            ? "border-transparent bg-surface-2 light:border-border light:bg-surface"
             : "border-transparent hover:bg-surface"
         )}
         onClick={onSelect}
@@ -102,7 +102,7 @@ function SidebarContent({
       <div className="shrink-0 px-3 pt-3">
         <button
           className={cn(
-            "flex w-full items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text shadow-inset-top transition-[background-color,border-color] duration-200 ease-brand hover:border-border-strong hover:bg-surface-2",
+            "flex w-full items-center gap-2 rounded-md border border-transparent bg-surface-2 px-3 py-2 text-sm text-text shadow-inset-top transition-[background-color,border-color] duration-200 ease-brand hover:border-border-strong light:border-border light:bg-surface light:hover:bg-surface-2",
             FOCUS_RING
           )}
           onClick={onNew}
@@ -189,7 +189,7 @@ export function Sidebar({
       {!collapsed && (
         <aside
           aria-label="Chat history"
-          className="hidden w-64 shrink-0 flex-col border-r border-border bg-background md:flex"
+          className="hidden w-64 shrink-0 flex-col border-r border-transparent bg-surface-sunken md:flex light:border-border light:bg-background"
         >
           {content}
         </aside>
@@ -212,7 +212,7 @@ export function Sidebar({
             <motion.aside
               animate={{ x: 0 }}
               aria-label="Chat history"
-              className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-border bg-background"
+              className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-transparent bg-surface-sunken light:border-border light:bg-background"
               exit={{ x: reducedMotion ? 0 : "-100%" }}
               initial={{ x: reducedMotion ? 0 : "-100%" }}
               transition={{

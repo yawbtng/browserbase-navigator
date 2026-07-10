@@ -15,7 +15,7 @@ import { ArrowUpRight, Bookmark } from "lucide-react";
  */
 export function PlanArtifact({ title, url }: { title: string; url: string }) {
   return (
-    <Artifact className="mb-3 max-w-md">
+    <Artifact className="mb-3 max-w-md border-transparent light:border-border">
       <ArtifactHeader>
         <div className="flex min-w-0 items-center gap-2.5">
           <Bookmark aria-hidden className="size-4 shrink-0 text-brand" />

@@ -109,7 +109,9 @@
      surface: near-black canvas, cards barely lighter than the canvas, hairline
      borders carrying the structure (user calibration vs live docs, 2026-07-07). */
   --bg:#0A0908; --surface:#121110; --surface-2:#1A1817; --surface-accent:#171310; --surface-sunken:#070605;
-  --border:#272321; --border-strong:#3B3531; --border-brand:#FF4500;
+  /* Alpha borders (Linear/Vercel dark idiom): barely-there hairlines that
+     read as structure, not as lines — user: dark borders were too strong. */
+  --border:rgba(245,243,240,0.07); --border-strong:rgba(245,243,240,0.14); --border-brand:#FF4500;
   --text:#F5F3F0; --text-muted:#A8A29E; --text-subtle:#8A827B;
   --brand:#FF4500; --brand-hover:#FF6A33; --brand-pressed:#E63E00;
   --brand-fg:#FFFFFF; --brand-fg-strong:#1A0A00; --brand-text:#FF7A45;
@@ -120,7 +122,7 @@
   --info:#4DA9E4;    --info-fg:#7BC4F0;    --info-tint:rgba(77,169,228,.16);
   --neutral:#78716C; --neutral-fg:#A8A29E; --neutral-tint:rgba(120,113,108,.16);
   --scrim:rgba(12,10,9,0.72);           /* overlay bg — never opacity-modify a hex token */
-  --highlight:rgba(245,243,240,0.06);   /* inset top hairline */
+  --highlight:rgba(245,243,240,0.04);   /* inset top hairline */
   --wc-red:#FF5F57; --wc-yellow:#FEBC2E; --wc-green:#28C840;
   --ease:cubic-bezier(0.3,0,0.15,1);
 

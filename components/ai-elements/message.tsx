@@ -55,7 +55,7 @@ export const MessageContent = ({
   <div
     className={cn(
       "flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
-      "group-[.is-user]:ml-auto group-[.is-user]:rounded-2xl group-[.is-user]:border group-[.is-user]:border-border group-[.is-user]:bg-surface-2 group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-text group-[.is-user]:shadow-inset-top",
+      "group-[.is-user]:ml-auto group-[.is-user]:rounded-2xl group-[.is-user]:bg-surface-2 group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-text",
       "group-[.is-assistant]:text-foreground",
       className
     )}
@@ -328,6 +328,9 @@ export const MessageResponse = memo(
     <Streamdown
       className={cn(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        // Breathing room (user: markdown felt too constrained): relaxed
+        // line-height + real paragraph/list rhythm.
+        "text-[15px] leading-7 [&_p]:my-3.5 [&_ul]:my-3 [&_ol]:my-3 [&_li]:my-1.5 [&_li]:leading-7 [&_h2]:mt-7 [&_h2]:mb-2.5 [&_h3]:mt-6 [&_h3]:mb-2",
         "[&_pre]:rounded-sharp [&_pre]:border [&_pre]:border-border [&_pre]:bg-surface-2",
         className
       )}

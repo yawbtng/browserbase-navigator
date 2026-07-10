@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -26,9 +26,14 @@ import {
   WebPreviewNavigation,
 } from "@/components/ai-elements/web-preview";
 import { BrowserChrome } from "@/components/navigator/browser-chrome";
+import {
+  CitationSourcesProvider,
+  citationMarkdownComponents,
+} from "@/components/navigator/citation-chip";
 import { Hero } from "@/components/navigator/hero";
 import { BrowserbaseMark } from "@/components/navigator/logo";
 import { MessageActions } from "@/components/navigator/message-actions";
+import { PlanArtifact } from "@/components/navigator/plan-artifact";
 import {
   parseKeepExploring,
   RelatedQuestions,
@@ -44,18 +49,22 @@ import { DotBounce } from "@/components/navigator/thinking";
 import { ToolRail, type ToolPart } from "@/components/navigator/tool-rail";
 
 /**
- * Renders assistant text, wrapping [n] markers in InlineCitation hover cards.
- * Falls back to streaming markdown (MessageResponse) when no sources exist.
+ * Renders assistant text through the full markdown pipeline, with [n]
+ * markers as citation chips (hover card = title + URL, click = preview
+ * panel). The [n] → link rewrite keeps streaming markdown intact; a custom
+ * anchor renderer in `citationMarkdownComponents` upgrades the matching
+ * links to chips — never fall back to plain text (raw markdown is
+ * unreadable).
  */
 function TextWithCitations({
   text,
   sources,
+  onOpenSource,
 }: {
   text: string;
   sources: CitedSource[];
+  onOpenSource: (url: string) => void;
 }) {
-  // Keep the full markdown pipeline and turn [n] markers into links to the
-  // cited page — never fall back to plain text (raw markdown is unreadable).
   const linked =
     sources.length === 0
       ? text
@@ -63,7 +72,17 @@ function TextWithCitations({
           const source = sources[Number(n) - 1];
           return source ? `[${marker}](${source.url})` : marker;
         });
-  return <MessageResponse>{linked}</MessageResponse>;
+  const citationContext = useMemo(
+    () => ({ sources, onOpen: onOpenSource }),
+    [sources, onOpenSource]
+  );
+  return (
+    <CitationSourcesProvider value={citationContext}>
+      <MessageResponse components={citationMarkdownComponents}>
+        {linked}
+      </MessageResponse>
+    </CitationSourcesProvider>
+  );
 }
 
 export default function ChatPage() {
@@ -159,18 +178,60 @@ export default function ChatPage() {
                 const sources =
                   parsedSources.length > 0 ? parsedSources : providerSources;
 
+                // save_plan results get a dedicated artifact card below the
+                // step rail (they used to be invisible outside the prose).
+                const savedPlans = toolParts.flatMap((part) => {
+                  if (
+                    part.type !== "tool-save_plan" ||
+                    part.state !== "output-available" ||
+                    !part.output ||
+                    typeof part.output !== "object" ||
+                    !("url" in part.output)
+                  ) {
+                    return [];
+                  }
+                  return [
+                    {
+                      id: part.toolCallId ?? String(part.type),
+                      title: String(part.input?.title ?? "Plan"),
+                      url: String((part.output as { url: unknown }).url),
+                    },
+                  ];
+                });
+
                 return (
                   <div key={message.id}>
-                    {isAssistant && <ToolRail parts={toolParts} />}
+                    {isAssistant && (
+                      <ToolRail
+                        answerStarted={textContent.length > 0}
+                        parts={toolParts}
+                      />
+                    )}
+                    {isAssistant &&
+                      savedPlans.map((plan) => (
+                        <PlanArtifact
+                          key={plan.id}
+                          title={plan.title}
+                          url={plan.url}
+                        />
+                      ))}
                     {isAssistant && (
                       <SourceCards onOpen={setPreviewUrl} sources={sources} />
                     )}
                     <Message from={message.role}>
                       <MessageContent>
                         {isAssistant ? (
-                          <TextWithCitations sources={sources} text={body} />
+                          <TextWithCitations
+                            onOpenSource={setPreviewUrl}
+                            sources={sources}
+                            text={body}
+                          />
                         ) : (
-                          <TextWithCitations sources={[]} text={textContent} />
+                          <TextWithCitations
+                            onOpenSource={setPreviewUrl}
+                            sources={[]}
+                            text={textContent}
+                          />
                         )}
                       </MessageContent>
                       {isAssistant && body.length > 0 && (

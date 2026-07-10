@@ -42,6 +42,7 @@ import { Hero } from "@/components/navigator/hero";
 import { BrowserbaseMark } from "@/components/navigator/logo";
 import { MessageActions } from "@/components/navigator/message-actions";
 import { PlanArtifact } from "@/components/navigator/plan-artifact";
+import { Preamble } from "@/components/navigator/preamble";
 import {
   parseKeepExploring,
   RelatedQuestions,
@@ -82,12 +83,16 @@ function TextWithCitations({
   sources: CitedSource[];
   onOpenSource: (url: string) => void;
 }) {
+  // Rewrite to [1](url) — digit-only link text. The earlier [[1]](url) form
+  // nests brackets, which CommonMark can parse as a reference-link shortcut
+  // instead of an inline link depending on context (9 of 20 markers in one
+  // answer rendered as plain text).
   const linked =
     sources.length === 0
       ? text
       : text.replace(/\[(\d+)\]/g, (marker, n: string) => {
           const source = sources[Number(n) - 1];
-          return source ? `[${marker}](${source.url})` : marker;
+          return source ? `[${n}](${source.url})` : marker;
         });
   const citationContext = useMemo(
     () => ({ sources, onOpen: onOpenSource }),
@@ -190,10 +195,27 @@ function ChatSession({
                   part.type.startsWith("tool-")
                 ) as unknown as ToolPart[];
 
+                // Step narration vs answer: text emitted BEFORE the last
+                // tool call is the model thinking out loud ("I'll search
+                // for…") — it renders as collapsible reasoning, never
+                // concatenated into the response (user calibration
+                // 2026-07-09, the AI Elements Reasoning pattern).
+                const lastToolIndex = message.parts.reduce(
+                  (acc, part, i) => (part.type.startsWith("tool-") ? i : acc),
+                  -1
+                );
                 const textContent = message.parts
-                  .filter((part) => part.type === "text")
+                  .filter(
+                    (part, i) => part.type === "text" && i > lastToolIndex
+                  )
                   .map((part) => (part.type === "text" ? part.text : ""))
                   .join("");
+                const preambleText = message.parts
+                  .filter(
+                    (part, i) => part.type === "text" && i < lastToolIndex
+                  )
+                  .map((part) => (part.type === "text" ? part.text : ""))
+                  .join("\n\n");
 
                 const { body: afterQuestions, questions } = isAssistant
                   ? parseKeepExploring(textContent)
@@ -234,6 +256,12 @@ function ChatSession({
                       <ToolRail
                         answerStarted={textContent.length > 0}
                         parts={toolParts}
+                      />
+                    )}
+                    {isAssistant && (
+                      <Preamble
+                        answerStarted={textContent.length > 0}
+                        text={preambleText}
                       />
                     )}
                     {isAssistant &&
@@ -417,7 +445,7 @@ export default function ChatPage() {
   const activeChat = chats.find((chat) => chat.id === activeChatId);
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-svh flex-col pb-[env(safe-area-inset-bottom)]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4 shadow-inset-top">
         <div className="flex items-center gap-2.5">
           <button

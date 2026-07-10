@@ -25,7 +25,9 @@ const CitationSourcesContext = createContext<{
 
 export const CitationSourcesProvider = CitationSourcesContext.Provider;
 
-const CITATION_TEXT = /^\[(\d+)\]$/;
+// Chips arrive as digit-only links ([1](url) — nested [[1]](url) was
+// ambiguous CommonMark); accept the legacy bracketed text too.
+const CITATION_TEXT = /^\[?(\d+)\]?$/;
 
 function textOf(children: ReactNode): string {
   if (typeof children === "string") {
@@ -95,7 +97,9 @@ function MarkdownAnchor({
   const n = match ? Number(match[1]) : 0;
   const source = n > 0 ? sources[n - 1] : undefined;
 
-  if (source) {
+  // href must match the indexed source — otherwise a legitimate link whose
+  // text happens to be a number (e.g. [2024](…)) would chip.
+  if (source && source.url === href) {
     return <CitationChip index={n} onOpen={onOpen} source={source} />;
   }
 

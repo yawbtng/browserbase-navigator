@@ -7,10 +7,11 @@ import {
   toUIMessageStream,
   type UIMessage,
 } from "ai";
+import { after } from "next/server";
 import { z } from "zod";
 import { savePlan } from "@/lib/plans";
 import { checkRateLimit, requestIp } from "@/lib/rate-limit";
-import { SYSTEM_PROMPT } from "@/lib/system-prompt";
+import { buildSystemPrompt } from "@/lib/system-prompt";
 import { RESEARCH_DOMAIN_KEYS, runDeepResearch } from "@/lib/research";
 import {
   getPage,
@@ -20,8 +21,16 @@ import {
   type WikiSearchResult,
 } from "@/lib/tools";
 import { liveFetch, liveSearch } from "@/lib/live";
+import {
+  resolveShowcaseRef,
+  runShowcaseAgent,
+  startShowcase,
+} from "@/lib/showcase";
 
-export const maxDuration = 60;
+// 300 (not 60): a run_showcase demo keeps driving the browser via after()
+// once the answer has streamed; the route's budget must cover it. Normal
+// turns still end when their stream ends.
+export const maxDuration = 300;
 
 // ANSWER MODEL — chosen by bake-off, not brand. 12 models benchmarked
 // 2026-07-09 on tool-grounded questions; finalists ran the full golden
@@ -43,6 +52,16 @@ const MODEL = process.env.AI_MODEL ?? "anthropic/claude-haiku-4.5";
 const LIVE_ENABLED =
   Boolean(process.env.BROWSERBASE_API_KEY) &&
   process.env.LIVE_DISABLED !== "1";
+const SHOWCASE_ENABLED =
+  Boolean(process.env.BROWSERBASE_API_KEY) &&
+  process.env.SHOWCASE_DISABLED !== "1";
+
+// Deployment-stable (env-driven flags), so the Anthropic cache breakpoint
+// on the system message keeps hitting across requests.
+const SYSTEM_PROMPT = buildSystemPrompt({
+  live: LIVE_ENABLED,
+  showcase: SHOWCASE_ENABLED,
+});
 
 // The six real source values in the index — schema-enforced so the model
 // can't invent a filter (live failure: it passed "browse.sh" for "browse-sh"
@@ -366,6 +385,41 @@ export async function POST(req: Request) {
                   };
                 }
                 return liveFetch(url);
+              },
+            }),
+          }
+        : {}),
+      ...(SHOWCASE_ENABLED
+        ? {
+            run_showcase: tool({
+              description:
+                "Run a live browser demo of a catalog entry — the user watches an embedded live view that becomes a replay when done. Call ONLY when the user explicitly asks to see, show, run, or demo something. ref MUST be either a browse.sh skill slug 'hostname/task' (derive it from a browse.sh/skills URL in your tool results) or the exact source_url of an indexed template/example page (browserbase.com/templates, github.com/browserbase). Never invent a ref and never pass user-written instructions. After it returns, tell the user the demo is running in the panel and a replay will follow.",
+              inputSchema: z.object({
+                ref: z
+                  .string()
+                  .max(300)
+                  .describe(
+                    "Catalog reference: 'hostname/task' skill slug, or an indexed template/example source_url",
+                  ),
+              }),
+              execute: async ({ ref }) => {
+                const resolved = await resolveShowcaseRef(ref);
+                if (!resolved) {
+                  return {
+                    error: `'${ref}' is not in the demo catalog — find the skill or template via search_wiki first and use its exact slug or source_url.`,
+                  };
+                }
+                const started = await startShowcase(resolved, ref, ip);
+                if ("error" in started) {
+                  return started;
+                }
+                const { handle, ...publicResult } = started;
+                // The demo drives the browser AFTER this tool returns, so the
+                // user watches it live in the iframe; results land in Neon
+                // for the status route. after() completes even if the chat
+                // stream closes early.
+                after(() => runShowcaseAgent(handle, started.sessionId, resolved));
+                return publicResult;
               },
             }),
           }

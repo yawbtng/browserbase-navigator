@@ -183,28 +183,37 @@ function ToolStep({ part }: { part: ToolPart }) {
 }
 
 /**
- * Operator step rail rebuilt on the AI Elements chain-of-thought: streams
- * tool activity live (mono badge + input + result note per step), then
- * collapses automatically once the answer starts streaming — unless the
- * user has toggled it, in which case their choice wins. Wraps TOOL
- * activity only; the model emits no reasoning tokens.
+ * The one meta row above an answer: the operator step rail rebuilt on the
+ * AI Elements chain-of-thought. The model's step narration ("I'll search
+ * for…") renders as the rail's first step (THOUGHT badge, muted text), the
+ * tool steps follow (mono badge + input + result note per step). The rail
+ * streams open live, then collapses automatically once the answer starts
+ * streaming — unless the user has toggled it, in which case their choice
+ * wins. Messages with no tool calls and no narration render nothing.
  */
 export function ToolRail({
   parts,
+  preamble = "",
   answerStarted,
 }: {
   parts: ToolPart[];
+  preamble?: string;
   answerStarted: boolean;
 }) {
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = userOpen ?? !answerStarted;
+  const thought = preamble.trim();
 
-  if (parts.length === 0) {
+  if (parts.length === 0 && !thought) {
     return null;
   }
 
   const running = parts.some(isRunning);
   const current = running ? [...parts].reverse().find(isRunning) : undefined;
+  // Narration is live when nothing else claims the header: pre-answer,
+  // no tool mid-flight.
+  const thinking = Boolean(thought) && !answerStarted && !current;
+  const stepCount = parts.length + (thought ? 1 : 0);
 
   return (
     <ChainOfThought className="mb-3" onOpenChange={setUserOpen} open={open}>
@@ -220,13 +229,34 @@ export function ToolRail({
               {inputSummary(toolName(current.type), current.input)}
             </span>
           </>
+        ) : thinking ? (
+          <>
+            <i className="size-1.5 shrink-0 animate-pulse rounded-full bg-brand" />
+            <span className="eyebrow rounded-sharp bg-surface px-1.5 py-0.5 text-text-muted">
+              THOUGHT
+            </span>
+          </>
         ) : (
           <span className="eyebrow">
-            {parts.length} step{parts.length === 1 ? "" : "s"}
+            {stepCount} step{stepCount === 1 ? "" : "s"}
           </span>
         )}
       </ChainOfThoughtHeader>
       <ChainOfThoughtContent>
+        {thought && (
+          <ChainOfThoughtStep
+            label={
+              <span className="eyebrow rounded-sharp bg-surface px-1.5 py-0.5 text-text-muted">
+                THOUGHT
+              </span>
+            }
+            status={thinking ? "active" : "complete"}
+          >
+            <p className="whitespace-pre-wrap text-[13px] leading-6 text-text-muted">
+              {thought}
+            </p>
+          </ChainOfThoughtStep>
+        )}
         {parts.map((part, index) => (
           <ToolStep key={part.toolCallId ?? `${part.type}-${index}`} part={part} />
         ))}

@@ -61,7 +61,9 @@ function CitationChip({
       <HoverCardTrigger asChild>
         <button
           aria-label={`Citation ${index}: ${source.title}`}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand mx-0.5 inline-flex -translate-y-[2px] items-center rounded-pill border border-transparent bg-surface-2 px-1.5 py-0 font-mono text-[10px] font-medium leading-4 text-brand-text transition-colors duration-200 ease-brand hover:border-border-brand hover:bg-brand-pulse light:border-border light:bg-surface"
+          // before:* is an invisible hit layer: the chip stays 16px tall
+          // visually but taps land on a ≥24px target (WCAG 2.5.8).
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand relative mx-0.5 inline-flex -translate-y-[2px] items-center rounded-pill border border-transparent bg-surface-2 px-1.5 py-0 font-mono text-[10px] font-medium leading-4 text-brand-text transition-colors duration-200 ease-brand before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:border-border-brand hover:bg-brand-pulse light:border-border light:bg-surface"
           onClick={() => onOpen(source.url)}
           type="button"
         >

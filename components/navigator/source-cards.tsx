@@ -1,7 +1,11 @@
 "use client";
 
+import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { domainOf } from "./icons";
+
+// Mirrors --ease in globals.css (framer can't consume the CSS var).
+const EASE: [number, number, number, number] = [0.3, 0, 0.15, 1];
 
 export interface CitedSource {
   url: string;
@@ -64,21 +68,70 @@ function SourceCard({
 }
 
 /**
+ * Skeleton stand-in for one source card while retrieval runs: same
+ * dimensions as the real card, placeholder bars from the fill hierarchy,
+ * and (motion permitting) a shimmer sweep driven by the parent overlay.
+ */
+function SkeletonCard({ shimmer }: { shimmer: boolean }) {
+  return (
+    <div className="relative flex w-44 shrink-0 flex-col gap-1.5 overflow-hidden rounded-lg border border-transparent bg-surface-2 px-3 py-2 shadow-inset-top light:border-border light:bg-surface">
+      <span className="flex items-center gap-1.5">
+        <span className="size-4 shrink-0 rounded-sm bg-surface light:bg-surface-2" />
+        <span className="h-3 w-20 rounded-sm bg-surface light:bg-surface-2" />
+      </span>
+      <span className="h-[13px] w-32 rounded-sm bg-surface light:bg-surface-2" />
+      {shimmer && (
+        <motion.span
+          animate={{ x: ["-100%", "100%"] }}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-border-strong to-transparent"
+          transition={{
+            duration: 1.4,
+            ease: "linear",
+            repeat: Number.POSITIVE_INFINITY,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
  * Morphic pattern #1 — horizontal row of compact source cards above the answer.
  * Favicons with a mono domain-letter fallback; first 4 inline, the rest behind
  * a "+N more" expander. Clicking a card opens the WebPreview panel.
+ *
+ * While `loading` (retrieval running, no sources parsed yet) the row renders
+ * shimmer skeleton cards — static placeholders under prefers-reduced-motion.
+ * The real row gets a single IO-gated rise-and-fade on first appearance.
  */
 export function SourceCards({
   sources,
   onOpen,
+  loading = false,
 }: {
   sources: CitedSource[];
   onOpen: (url: string) => void;
+  loading?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const reducedMotion = useReducedMotion();
 
   if (sources.length === 0) {
-    return null;
+    if (!loading) {
+      return null;
+    }
+    return (
+      <div
+        aria-busy="true"
+        aria-label="Loading sources"
+        className="mb-3 flex gap-2 overflow-x-auto pb-1"
+      >
+        {[0, 1, 2].map((i) => (
+          <SkeletonCard key={i} shimmer={!reducedMotion} />
+        ))}
+      </div>
+    );
   }
 
   const INLINE = 4;
@@ -86,28 +139,31 @@ export function SourceCards({
   const visible = expanded ? sources : sources.slice(0, INLINE);
 
   return (
-    <div className="mb-3 flex flex-col gap-2">
-      <span className="eyebrow">{sources.length} sources</span>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {visible.map((source, i) => (
-          <SourceCard
-            index={i}
-            key={`${source.url}-${i}`}
-            onOpen={onOpen}
-            source={source}
-          />
-        ))}
-        {!expanded && overflow > 0 && (
-          <button
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg eyebrow flex w-20 shrink-0 items-center justify-center rounded-lg border border-transparent bg-surface-2 px-3 py-2 text-text-muted shadow-inset-top transition-colors duration-200 ease-brand hover:border-border-strong hover:text-text light:border-border light:bg-surface"
-            onClick={() => setExpanded(true)}
-            type="button"
-          >
-            +{overflow} more
-          </button>
-        )}
-      </div>
-    </div>
+    <motion.div
+      className="mb-3 flex gap-2 overflow-x-auto pb-1"
+      initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+      transition={{ duration: 0.25, ease: EASE }}
+      viewport={{ once: true }}
+      whileInView={{ opacity: 1, y: 0 }}
+    >
+      {visible.map((source, i) => (
+        <SourceCard
+          index={i}
+          key={`${source.url}-${i}`}
+          onOpen={onOpen}
+          source={source}
+        />
+      ))}
+      {!expanded && overflow > 0 && (
+        <button
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg eyebrow flex w-20 shrink-0 items-center justify-center rounded-lg border border-transparent bg-surface-2 px-3 py-2 text-text-muted shadow-inset-top transition-colors duration-200 ease-brand hover:border-border-strong hover:text-text light:border-border light:bg-surface"
+          onClick={() => setExpanded(true)}
+          type="button"
+        >
+          +{overflow} more
+        </button>
+      )}
+    </motion.div>
   );
 }
 

@@ -42,7 +42,6 @@ import { Hero } from "@/components/navigator/hero";
 import { BrowserbaseMark } from "@/components/navigator/logo";
 import { MessageActions } from "@/components/navigator/message-actions";
 import { PlanArtifact } from "@/components/navigator/plan-artifact";
-import { Preamble } from "@/components/navigator/preamble";
 import {
   parseKeepExploring,
   RelatedQuestions,
@@ -183,6 +182,11 @@ function ChatSession({
             <ConversationContent className="mx-auto w-full max-w-3xl">
               {messages.map((message) => {
                 const isAssistant = message.role === "assistant";
+                // Only the last message can be mid-stream; parsers use this
+                // to hold back half-arrived lines.
+                const messageStreaming =
+                  status === "streaming" &&
+                  message.id === messages.at(-1)?.id;
 
                 const providerSources: CitedSource[] = message.parts.flatMap(
                   (part) =>
@@ -218,7 +222,9 @@ function ChatSession({
                   .join("\n\n");
 
                 const { body: afterQuestions, questions } = isAssistant
-                  ? parseKeepExploring(textContent)
+                  ? parseKeepExploring(textContent, {
+                      streaming: messageStreaming,
+                    })
                   : { body: textContent, questions: [] };
                 // Model-emitted "### Sources" section carries the citation
                 // data (provider source-url parts never arrive from
@@ -256,12 +262,7 @@ function ChatSession({
                       <ToolRail
                         answerStarted={textContent.length > 0}
                         parts={toolParts}
-                      />
-                    )}
-                    {isAssistant && (
-                      <Preamble
-                        answerStarted={textContent.length > 0}
-                        text={preambleText}
+                        preamble={preambleText}
                       />
                     )}
                     {isAssistant &&
@@ -273,7 +274,11 @@ function ChatSession({
                         />
                       ))}
                     {isAssistant && (
-                      <SourceCards onOpen={setPreviewUrl} sources={sources} />
+                      <SourceCards
+                        loading={messageStreaming && toolParts.length > 0}
+                        onOpen={setPreviewUrl}
+                        sources={sources}
+                      />
                     )}
                     <Message from={message.role}>
                       <MessageContent>

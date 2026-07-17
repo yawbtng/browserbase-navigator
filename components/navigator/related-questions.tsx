@@ -6,8 +6,15 @@ import { ArrowUpRight } from "lucide-react";
  * Splits a completed answer into its body and the trailing "### Keep exploring"
  * follow-up questions. Falls back to `{ body: text, questions: [] }` when the
  * heading is absent or malformed — never drops content.
+ *
+ * While `streaming`, only newline-terminated lines count as questions: a
+ * half-arrived line would otherwise flash as a truncated pill ("How") until
+ * the rest of it streams in. Once streaming ends every line qualifies.
  */
-export function parseKeepExploring(text: string): {
+export function parseKeepExploring(
+  text: string,
+  { streaming = false }: { streaming?: boolean } = {}
+): {
   body: string;
   questions: string[];
 } {
@@ -22,8 +29,14 @@ export function parseKeepExploring(text: string): {
     ""
   );
 
-  const questions = rest
-    .split("\n")
+  let lines = rest.split("\n");
+  // Mid-stream, the final split segment is incomplete unless the text ends
+  // with a newline — hold it back until it terminates.
+  if (streaming && !rest.endsWith("\n")) {
+    lines = lines.slice(0, -1);
+  }
+
+  const questions = lines
     .map((line) =>
       line
         .replace(/^\s*(?:[-*]|\d+\.)\s+/, "")
@@ -32,9 +45,13 @@ export function parseKeepExploring(text: string): {
     .filter((line) => line.length > 0 && !line.startsWith("#"))
     .slice(0, 3);
 
-  // If we found the heading but no parseable items, keep the original text.
   if (questions.length === 0) {
-    return { body: text, questions: [] };
+    // Mid-stream the heading is real but its items haven't arrived; strip
+    // the heading so it never flashes as raw markdown. Once complete, a
+    // heading with no parseable items keeps the original text.
+    return streaming
+      ? { body, questions: [] }
+      : { body: text, questions: [] };
   }
 
   return { body, questions };

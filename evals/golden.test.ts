@@ -55,6 +55,37 @@ const GOLDEN: GoldenCase[] = [
     expect: ["browserbase"],
     reject: /\b3[0-4]\s*(inches|in\b|")/i,
   },
+  {
+    name: "7. covered question never touches the live tier",
+    question: "Does close() end a keepAlive session?",
+    expect: ["docs.browserbase.com"],
+    // The live tier is last-resort: a corpus-covered question firing
+    // live_search/live_fetch is a regression (latency + API spend).
+    reject: /live_search|live_fetch/,
+  },
+];
+
+/**
+ * Cost-bearing cases (Browserbase API calls / a real browser session) are
+ * opt-in: EVAL_LIVE=1 / EVAL_SHOWCASE=1. Tool names appear in the raw SSE
+ * stream as tool-part types, so substring assertions see them.
+ */
+const LIVE_CASES: GoldenCase[] = [
+  {
+    name: "L1. recency question escalates to live_search",
+    question:
+      "Are there any Browserbase events, webinars, or meetups coming up in the next few weeks?",
+    expect: ["live_search"],
+  },
+];
+
+const SHOWCASE_CASES: GoldenCase[] = [
+  {
+    name: "S1. explicit demo ask starts a live browser showcase",
+    question:
+      "Show me a live browser demo of the amazon product scraping template",
+    expect: ["run_showcase", "liveViewUrl"],
+  },
 ];
 
 async function askNavigator(question: string): Promise<string> {
@@ -78,8 +109,8 @@ async function askNavigator(question: string): Promise<string> {
   return await res.text();
 }
 
-describe.skipIf(!BASE)("golden questions", () => {
-  for (const c of GOLDEN) {
+function runCases(cases: GoldenCase[]) {
+  for (const c of cases) {
     it(c.name, { timeout: 120_000 }, async () => {
       const answer = (await askNavigator(c.question)).toLowerCase();
       for (const needle of c.expect) {
@@ -90,4 +121,16 @@ describe.skipIf(!BASE)("golden questions", () => {
       }
     });
   }
+}
+
+describe.skipIf(!BASE)("golden questions", () => {
+  runCases(GOLDEN);
+});
+
+describe.skipIf(!BASE || !process.env.EVAL_LIVE)("live tier", () => {
+  runCases(LIVE_CASES);
+});
+
+describe.skipIf(!BASE || !process.env.EVAL_SHOWCASE)("showcase", () => {
+  runCases(SHOWCASE_CASES);
 });

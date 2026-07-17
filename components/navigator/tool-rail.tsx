@@ -32,6 +32,8 @@ const BADGES: Record<string, string> = {
   recent_changes: "CHANGES",
   save_plan: "SAVE",
   deep_research: "RESEARCH",
+  live_search: "LIVE",
+  live_fetch: "FETCH",
 };
 
 function toolName(type: string): string {
@@ -66,6 +68,10 @@ function inputSummary(name: string, input: Record<string, unknown> = {}): string
       return `last ${input.days ?? 30}d`;
     case "save_plan":
       return String(input.title ?? "");
+    case "live_search":
+      return String(input.query ?? "");
+    case "live_fetch":
+      return input.url ? domainOf(String(input.url)) : "";
     case "deep_research":
       return Array.isArray(input.domains)
         ? `${input.domains.length} sub-agents: ${(input.domains as string[]).join(", ")}`
@@ -89,6 +95,10 @@ function resultSummary(name: string, output: unknown): string {
       return `${n} entries`;
     case "save_plan":
       return "saved";
+    case "live_search":
+      return `${n} live results`;
+    case "live_fetch":
+      return "fetched";
     case "deep_research": {
       const briefs =
         output && typeof output === "object" && "briefs" in output

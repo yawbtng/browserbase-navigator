@@ -19,6 +19,7 @@ import {
   searchWiki,
   type WikiSearchResult,
 } from "@/lib/tools";
+import { liveFetch, liveSearch } from "@/lib/live";
 
 export const maxDuration = 60;
 
@@ -36,6 +37,12 @@ export const maxDuration = 60;
 // lib/research.ts as sub-agents instead, where briefs are re-grounded by
 // this model before anything reaches the user.
 const MODEL = process.env.AI_MODEL ?? "anthropic/claude-haiku-4.5";
+
+// Live tier registers only when creds exist; LIVE_DISABLED=1 is its own
+// kill switch so live-web spend can be paused without pausing the app.
+const LIVE_ENABLED =
+  Boolean(process.env.BROWSERBASE_API_KEY) &&
+  process.env.LIVE_DISABLED !== "1";
 
 // The six real source values in the index — schema-enforced so the model
 // can't invent a filter (live failure: it passed "browse.sh" for "browse-sh"
@@ -60,6 +67,12 @@ const CHAT_LIMIT_PER_HOUR = 30;
 const PLAN_LIMIT_PER_DAY = 10;
 const MAX_MESSAGE_CHARS = 4_000;
 const MAX_MESSAGES = 40;
+// Live tier: per-IP cap shared by both tools, plus global daily budgets —
+// Browserbase Search is ~1,000 calls/month on this plan, so 30/day keeps a
+// hostile IP rotation from burning the month in an afternoon.
+const LIVE_LIMIT_PER_HOUR = 8;
+const LIVE_SEARCH_GLOBAL_PER_DAY = 30;
+const LIVE_FETCH_GLOBAL_PER_DAY = 60;
 
 export async function POST(req: Request) {
   // Spend kill switch: flip NAVIGATOR_DISABLED=1 in Vercel env, done.
@@ -296,6 +309,67 @@ export async function POST(req: Request) {
           return { url: `${origin}/plan/${slug}` };
         },
       }),
+      ...(LIVE_ENABLED
+        ? {
+            live_search: tool({
+              description:
+                "LAST-RESORT live web search (Browserbase Search API). Use ONLY when the wiki tools returned nothing relevant AND the question needs current, live information — upcoming events, current prices, service status, releases newer than the corpus. NEVER use it for questions the wiki index can answer, and never as a first step. Results carry no body text — follow up with live_fetch on the single most promising URL if you need content.",
+              inputSchema: z.object({
+                query: z
+                  .string()
+                  .min(3)
+                  .max(200)
+                  .describe("Web search query"),
+              }),
+              execute: async ({ query }) => {
+                const [perIp, global] = await Promise.all([
+                  checkRateLimit(ip, "live", LIVE_LIMIT_PER_HOUR, 60),
+                  checkRateLimit(
+                    "global",
+                    "live-search-global",
+                    LIVE_SEARCH_GLOBAL_PER_DAY,
+                    24 * 60,
+                  ),
+                ]);
+                if (!perIp.allowed || !global.allowed) {
+                  return {
+                    error:
+                      "live search budget reached — answer from the wiki index",
+                  };
+                }
+                return liveSearch(query);
+              },
+            }),
+            live_fetch: tool({
+              description:
+                "Fetch one public web page as markdown via the Browserbase Fetch API (no JavaScript execution). Use ONLY on URLs returned by live_search, or a specific live URL the user gave you, after the wiki index missed. Returns a typed error if the page needs JavaScript — do not retry the same URL.",
+              inputSchema: z.object({
+                url: z.url().max(500).describe("http(s) URL to fetch"),
+              }),
+              execute: async ({ url }) => {
+                if (!/^https?:\/\//i.test(url)) {
+                  return { error: "only http(s) URLs can be fetched" };
+                }
+                const [perIp, global] = await Promise.all([
+                  checkRateLimit(ip, "live", LIVE_LIMIT_PER_HOUR, 60),
+                  checkRateLimit(
+                    "global",
+                    "live-fetch-global",
+                    LIVE_FETCH_GLOBAL_PER_DAY,
+                    24 * 60,
+                  ),
+                ]);
+                if (!perIp.allowed || !global.allowed) {
+                  return {
+                    error:
+                      "live fetch budget reached — answer from the wiki index",
+                  };
+                }
+                return liveFetch(url);
+              },
+            }),
+          }
+        : {}),
     },
   });
 

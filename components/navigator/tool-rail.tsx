@@ -34,6 +34,7 @@ const BADGES: Record<string, string> = {
   deep_research: "RESEARCH",
   live_search: "LIVE",
   live_fetch: "FETCH",
+  run_showcase: "DEMO",
 };
 
 function toolName(type: string): string {
@@ -72,6 +73,8 @@ function inputSummary(name: string, input: Record<string, unknown> = {}): string
       return String(input.query ?? "");
     case "live_fetch":
       return input.url ? domainOf(String(input.url)) : "";
+    case "run_showcase":
+      return String(input.ref ?? "");
     case "deep_research":
       return Array.isArray(input.domains)
         ? `${input.domains.length} sub-agents: ${(input.domains as string[]).join(", ")}`
@@ -99,6 +102,13 @@ function resultSummary(name: string, output: unknown): string {
       return `${n} live results`;
     case "live_fetch":
       return "fetched";
+    case "run_showcase": {
+      const status =
+        output && typeof output === "object" && "status" in output
+          ? String((output as { status: unknown }).status)
+          : null;
+      return status === "running" ? "live" : "done";
+    }
     case "deep_research": {
       const briefs =
         output && typeof output === "object" && "briefs" in output

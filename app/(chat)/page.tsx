@@ -42,6 +42,7 @@ import { Hero } from "@/components/navigator/hero";
 import { BrowserbaseMark } from "@/components/navigator/logo";
 import { MessageActions } from "@/components/navigator/message-actions";
 import { PlanArtifact } from "@/components/navigator/plan-artifact";
+import { ShowcaseArtifact } from "@/components/navigator/showcase-artifact";
 import {
   parseKeepExploring,
   RelatedQuestions,
@@ -256,6 +257,35 @@ function ChatSession({
                   ];
                 });
 
+                // Live browser demos: run_showcase returns the session +
+                // live-view URL immediately; the card handles live → replay.
+                const showcases = toolParts.flatMap((part) => {
+                  if (
+                    part.type !== "tool-run_showcase" ||
+                    part.state !== "output-available" ||
+                    !part.output ||
+                    typeof part.output !== "object" ||
+                    !("sessionId" in part.output)
+                  ) {
+                    return [];
+                  }
+                  const out = part.output as {
+                    sessionId: string;
+                    liveViewUrl: string;
+                    title?: string;
+                    sourceUrl?: string;
+                  };
+                  return [
+                    {
+                      id: out.sessionId,
+                      sessionId: out.sessionId,
+                      liveViewUrl: out.liveViewUrl,
+                      title: out.title ?? "Browser demo",
+                      sourceUrl: out.sourceUrl ?? "",
+                    },
+                  ];
+                });
+
                 return (
                   <div key={message.id}>
                     {isAssistant && (
@@ -265,6 +295,16 @@ function ChatSession({
                         preamble={preambleText}
                       />
                     )}
+                    {isAssistant &&
+                      showcases.map((demo) => (
+                        <ShowcaseArtifact
+                          key={demo.id}
+                          liveViewUrl={demo.liveViewUrl}
+                          sessionId={demo.sessionId}
+                          sourceUrl={demo.sourceUrl}
+                          title={demo.title}
+                        />
+                      ))}
                     {isAssistant &&
                       savedPlans.map((plan) => (
                         <PlanArtifact

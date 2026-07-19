@@ -262,6 +262,11 @@ export async function startShowcase(
     env: "BROWSERBASE",
     apiKey: process.env.BROWSERBASE_API_KEY,
     projectId: process.env.BROWSERBASE_PROJECT_ID,
+    // Pino's worker-thread transport can't resolve its file target inside a
+    // Vercel function bundle ("unable to determine transport target") — the
+    // Stagehand Vercel guide prescribes disabling it. Found via our own
+    // wiki: stagehand/v3/integrations/vercel/configuration.md.
+    disablePino: true,
     browserbaseSessionCreateParams: {
       projectId: process.env.BROWSERBASE_PROJECT_ID!,
       timeout: SESSION_TIMEOUT_S,

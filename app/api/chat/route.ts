@@ -25,6 +25,7 @@ import {
   resolveShowcaseRef,
   runShowcaseAgent,
   startShowcase,
+  suggestShowcaseRefs,
 } from "@/lib/showcase";
 
 // 300 (not 60): a run_showcase demo keeps driving the browser via after()
@@ -157,10 +158,19 @@ export async function POST(req: Request) {
             bucket.push(r);
             bySource.set(r.source, bucket);
           }
+          // Official docs lead the rotation: models cite top-down, and the
+          // citation contract prefers a product's own docs — burying
+          // docs-stagehand behind marketing/template chunks makes the model
+          // answer comparisons one-sided (seen live 2026-07-18, the corpus's
+          // new template pages crowd the pack head).
+          const sourceOrder = [...bySource.keys()].sort((a, b) => {
+            const rank = (s: string) => (s.startsWith("docs-") ? 0 : 1);
+            return rank(a) - rank(b);
+          });
           const out: WikiSearchResult[] = [];
           while (out.length < Math.min(pool.length, 12)) {
-            for (const bucket of bySource.values()) {
-              const next = bucket.shift();
+            for (const key of sourceOrder) {
+              const next = bySource.get(key)?.shift();
               if (next && out.length < 12) out.push(next);
             }
           }
@@ -405,8 +415,12 @@ export async function POST(req: Request) {
               execute: async ({ ref }) => {
                 const resolved = await resolveShowcaseRef(ref);
                 if (!resolved) {
+                  const suggestions = await suggestShowcaseRefs(ref);
                   return {
-                    error: `'${ref}' is not in the demo catalog — find the skill or template via search_wiki first and use its exact slug or source_url.`,
+                    error:
+                      suggestions.length > 0
+                        ? `'${ref}' is not in the demo catalog. Closest catalog entries — call run_showcase again with ONE of these exact refs: ${suggestions.join(" | ")}`
+                        : `'${ref}' is not in the demo catalog — find the skill or template via search_wiki first and use its exact slug or source_url.`,
                   };
                 }
                 const started = await startShowcase(resolved, ref, ip);

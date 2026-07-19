@@ -46,49 +46,173 @@ export interface ShowcaseStart {
 const SKILL_SLUG = /^[a-z0-9.-]+\/[a-z0-9][a-z0-9-]*$/;
 
 /**
- * Resolve a catalog ref to an indexed wiki page. Accepts either a browse.sh
- * skill slug ("hostname/task") or the exact source_url of an indexed
- * template/example page (marketing templates, github template code).
+ * SQL scope shared by fuzzy resolution and did-you-mean suggestions: only
+ * pages that are legitimate demo material. This is the trust boundary — no
+ * matter how forgiving the ref parsing gets, a demo brief can only ever be
+ * an indexed catalog page, never visitor-supplied text.
+ */
+async function queryCatalog(like: string, limit: number): Promise<string[]> {
+  const rows = await sql()`
+    select source_url from pages
+    where (source = 'browse-sh'
+        or (source = 'github' and source_url like 'https://github.com/browserbase/%')
+        or (source = 'marketing' and source_url like '%browserbase.com/templates/%'))
+      and (source_url ilike ${like} or coalesce(title, '') ilike ${like})
+    order by length(source_url) asc
+    limit ${limit}`;
+  return rows.map((r) => r.source_url as string);
+}
+
+function cleanTerm(term: string): string {
+  return term
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/[^a-z0-9 ._/-]+/g, " ")
+    .trim();
+}
+
+/**
+ * Strict catalog search: every word present, in order. The ONLY search that
+ * may auto-resolve a ref — a demo the user didn't name must never start
+ * because one word happened to match (seen in testing: "Stagehand Research
+ * Agent" one-word-matched a different template).
+ */
+async function searchCatalogStrict(
+  term: string,
+  limit: number,
+): Promise<string[]> {
+  const cleaned = cleanTerm(term);
+  if (cleaned.length < 3) return [];
+  return queryCatalog(`%${cleaned.replace(/[ /]+/g, "%")}%`, limit);
+}
+
+// URL scaffolding words match everything in the catalog — they carry no
+// signal about WHICH entry was meant.
+const STOP_WORDS = new Set([
+  "browse.sh",
+  "skills",
+  "github.com",
+  "browserbase",
+  "browserbase.com",
+  "templates",
+  "template",
+  "blob",
+  "main",
+  "index.ts",
+  "readme.md",
+  "www",
+]);
+
+/**
+ * Relaxed search for did-you-mean SUGGESTIONS only (the model retries with
+ * an exact ref, which is the confirmation step): per-word matches ranked by
+ * how many distinctive words hit; near-full coverage required.
+ */
+async function searchCatalogRelaxed(
+  term: string,
+  limit: number,
+): Promise<string[]> {
+  const words = cleanTerm(term)
+    .split(/[ /]+/)
+    .filter((w) => w.length >= 4 && !STOP_WORDS.has(w))
+    .slice(0, 3);
+  if (words.length === 0) return [];
+  const hits = new Map<string, number>();
+  for (const word of words) {
+    for (const url of await queryCatalog(`%${word}%`, 10)) {
+      hits.set(url, (hits.get(url) ?? 0) + 1);
+    }
+  }
+  const minHits = Math.max(1, words.length - 1);
+  return [...hits.entries()]
+    .filter(([, n]) => n >= minHits)
+    .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)
+    .slice(0, limit)
+    .map(([url]) => url);
+}
+
+/** Did-you-mean candidates for the tool error, so the model can retry. */
+export async function suggestShowcaseRefs(ref: string): Promise<string[]> {
+  try {
+    const strict = await searchCatalogStrict(ref, 3);
+    if (strict.length > 0) return strict;
+    return await searchCatalogRelaxed(ref, 3);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolve a catalog ref to an indexed wiki page. Deliberately forgiving
+ * about the ref's SHAPE (models pass slugs, full URLs with or without .md,
+ * bare repo links, or plain template names — seen live in prod 2026-07-18)
+ * while staying strict about the TARGET: only indexed catalog pages resolve.
  */
 export async function resolveShowcaseRef(
   ref: string,
 ): Promise<ResolvedRef | null> {
-  let sourceUrl: string | null = null;
+  const candidates: string[] = [];
 
   if (ref.includes("://")) {
-    const allowed =
-      /^https:\/\/(www\.)?browserbase\.com\/(templates|use-cases)\//.test(ref) ||
-      /^https:\/\/browse\.sh\/skills\//.test(ref) ||
-      /^https:\/\/github\.com\/browserbase\//.test(ref);
-    if (allowed) sourceUrl = ref;
+    if (/^https:\/\/browse\.sh\/skills\//.test(ref)) {
+      // Indexed skill pages end in .md; models often cite them without it.
+      candidates.push(ref.endsWith(".md") ? ref : `${ref}.md`);
+    } else if (/^https:\/\/(www\.)?browserbase\.com\/(templates|use-cases)\//.test(ref)) {
+      candidates.push(ref);
+      // Not every template has a marketing page: fall back to the
+      // templates-monorepo entrypoint for the same name (branch varies —
+      // currently `dev` — so LIKE, not a hardcoded branch).
+      const name = /\/(?:templates|use-cases)\/([a-z0-9-]+)\/?$/.exec(ref)?.[1];
+      if (name) {
+        const rows = await sql()`
+          select source_url from pages
+          where source_url like ${`https://github.com/browserbase/templates/blob/%/typescript/${name}/index.ts`}
+          limit 1`;
+        if (rows[0]) candidates.push(rows[0].source_url as string);
+      }
+    } else if (/^https:\/\/github\.com\/browserbase\//.test(ref)) {
+      candidates.push(ref);
+      // Bare repo link → its indexed README (any default branch).
+      if (/^https:\/\/github\.com\/browserbase\/[^/]+\/?$/.test(ref)) {
+        const rows = await sql()`
+          select source_url from pages
+          where source_url like ${`${ref.replace(/\/$/, "")}/blob/%/README.md`}
+          limit 1`;
+        if (rows[0]) candidates.push(rows[0].source_url as string);
+      }
+    }
   } else if (SKILL_SLUG.test(ref)) {
-    sourceUrl = `https://browse.sh/skills/${ref}.md`;
+    candidates.push(`https://browse.sh/skills/${ref}.md`);
   }
-  if (!sourceUrl) return null;
 
-  let page = await getPage(sourceUrl);
-  // Not every template has a marketing page (and vice versa): fall back to
-  // the templates-monorepo entrypoint for the same name. The branch varies
-  // (currently `dev`), so match it with LIKE instead of hardcoding.
-  if ("error" in page) {
-    const name = /browserbase\.com\/templates\/([a-z0-9-]+)$/.exec(ref)?.[1];
-    if (!name) return null;
-    const rows = await sql()`
-      select source_url from pages
-      where source_url like ${`https://github.com/browserbase/templates/blob/%/typescript/${name}/index.ts`}
-      limit 1`;
-    const blobUrl = rows[0]?.source_url as string | undefined;
-    if (!blobUrl) return null;
-    page = await getPage(blobUrl);
-    if ("error" in page) return null;
+  for (const url of candidates) {
+    const page = await getPage(url);
+    if (!("error" in page)) {
+      return {
+        title: page.title ?? ref,
+        sourceUrl: page.url,
+        // Corpus text only (playbook workflows, template code), sliced so
+        // the runner's prompt stays bounded.
+        brief: page.markdown.slice(0, 8_000),
+      };
+    }
   }
-  return {
-    title: page.title ?? ref,
-    sourceUrl: page.url,
-    // The brief is corpus text (playbook Workflow sections, template code) —
-    // sliced so the runner's prompt stays bounded.
-    brief: page.markdown.slice(0, 8_000),
-  };
+
+  // Last rung: STRICT catalog search over the ref's words ("amazon product
+  // scraping" → the matching template page). Relaxed matching is deliberately
+  // suggestion-only — never auto-run a demo the user didn't name.
+  const fuzzy = await searchCatalogStrict(ref, 1);
+  if (fuzzy[0]) {
+    const page = await getPage(fuzzy[0]);
+    if (!("error" in page)) {
+      return {
+        title: page.title ?? ref,
+        sourceUrl: page.url,
+        brief: page.markdown.slice(0, 8_000),
+      };
+    }
+  }
+  return null;
 }
 
 /**

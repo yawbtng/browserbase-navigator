@@ -423,7 +423,19 @@ export async function POST(req: Request) {
                         : `'${ref}' is not in the demo catalog — find the skill or template via search_wiki first and use its exact slug or source_url.`,
                   };
                 }
-                const started = await startShowcase(resolved, ref, ip);
+                let started: Awaited<ReturnType<typeof startShowcase>>;
+                try {
+                  started = await startShowcase(resolved, ref, ip);
+                } catch (err) {
+                  // Surface the real failure to the model (and our logs) —
+                  // the stream layer masks thrown errors as "An error
+                  // occurred", which hides root causes (prod, 2026-07-18).
+                  const msg = err instanceof Error ? err.message : String(err);
+                  console.error("run_showcase startShowcase failed:", err);
+                  return {
+                    error: `could not start the demo session (${msg.slice(0, 300)}) — tell the user the demo could not start and link the playbook at ${resolved.sourceUrl}`,
+                  };
+                }
                 if ("error" in started) {
                   return started;
                 }

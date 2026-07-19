@@ -153,6 +153,15 @@ export async function resolveShowcaseRef(
 ): Promise<ResolvedRef | null> {
   const candidates: string[] = [];
 
+  // Models drop the scheme ("browserbase.com/templates/x") — restore it so
+  // the URL branch handles catalog hosts uniformly.
+  if (
+    !ref.includes("://") &&
+    /^(www\.)?(browserbase\.com|browse\.sh|github\.com)\//.test(ref)
+  ) {
+    ref = `https://${ref}`;
+  }
+
   if (ref.includes("://")) {
     if (/^https:\/\/browse\.sh\/skills\//.test(ref)) {
       // Indexed skill pages end in .md; models often cite them without it.

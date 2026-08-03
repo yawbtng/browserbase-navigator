@@ -105,8 +105,25 @@ export async function POST(req: Request) {
 
   const ip = requestIp(req);
   const ratePromise = checkRateLimit(ip, "chat", CHAT_LIMIT_PER_HOUR, 60);
+  // The result isn't consulted until later; without a handler attached now, a
+  // 400/413 return in between leaves this rejection floating.
+  ratePromise.catch(() => {});
 
-  const { messages }: { messages: UIMessage[] } = await req.json();
+  // The body is unauthenticated input. Every tool argument is schema-checked
+  // but this was destructured raw, so `{}`, a message with no `parts`, or
+  // malformed JSON each crashed the route with a 500.
+  let messages: UIMessage[];
+  try {
+    const body = (await req.json()) as { messages?: unknown };
+    if (!Array.isArray(body?.messages)) throw new Error("messages must be an array");
+    messages = body.messages.map((m) => {
+      if (!m || typeof m !== "object") throw new Error("malformed message");
+      const parts = (m as { parts?: unknown }).parts;
+      return { ...(m as UIMessage), parts: Array.isArray(parts) ? parts : [] };
+    });
+  } catch {
+    return Response.json({ error: "Malformed request body." }, { status: 400 });
+  }
 
   // Eager retrieval: start the (embed + vector search) for the newest user
   // message NOW, in parallel with everything else. Handing the model evidence
@@ -191,13 +208,20 @@ export async function POST(req: Request) {
       { status: 413 },
     );
   }
-  const lastText = messages
-    .at(-1)
-    ?.parts.reduce(
-      (n, p) => n + (p.type === "text" ? p.text.length : 0),
-      0,
-    );
-  if ((lastText ?? 0) > MAX_MESSAGE_CHARS) {
+  // Cap the WHOLE conversation, not just the newest message: the client sends
+  // the full array, so a 40-message payload could otherwise carry megabytes
+  // of model context for the price of one rate-limit token.
+  const totalChars = messages.reduce(
+    (sum, m) =>
+      sum +
+      m.parts.reduce((n, p) => n + (p.type === "text" ? p.text.length : 0), 0),
+    0,
+  );
+  const lastText = (messages.at(-1)?.parts ?? []).reduce(
+    (n, p) => n + (p.type === "text" ? p.text.length : 0),
+    0,
+  );
+  if (lastText > MAX_MESSAGE_CHARS || totalChars > MAX_MESSAGE_CHARS * 20) {
     return Response.json({ error: "Message too long." }, { status: 413 });
   }
 
@@ -213,7 +237,14 @@ export async function POST(req: Request) {
   // Evidence rides as an extra text part on the last user message — Google
   // rejects system messages anywhere but the start of the conversation, so
   // a trailing system message is not portable across gateway providers.
-  const modelMessages = await convertToModelMessages(messages);
+  // Throws MessageConversionError on role/part shapes the SDK can't map
+  // (e.g. a bare 'tool' message) — unauthenticated input, so a 400 not a 500.
+  let modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>;
+  try {
+    modelMessages = await convertToModelMessages(messages);
+  } catch {
+    return Response.json({ error: "Malformed request body." }, { status: 400 });
+  }
   if (Array.isArray(prefetched) && prefetched.length > 0) {
     const last = modelMessages.at(-1);
     if (last?.role === "user") {

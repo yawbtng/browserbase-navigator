@@ -53,21 +53,26 @@ export async function searchWiki(
       query,
       capped.map(
         (r) =>
-          `${(r.title as string) ?? ""} ${(r.heading as string) ?? ""}\n${(r.content as string).slice(0, 600)}`,
+          `${(r.title as string) ?? ""} ${(r.heading as string) ?? ""}\n${typeof r.content === "string" ? r.content.slice(0, 600) : ""}`,
       ),
       8,
     );
     const rows = order
       ? order.map((i) => capped[i]).filter(Boolean)
       : capped.slice(0, 8);
-    return rows.map((r) => ({
-      url: r.source_url as string,
-      title: (r.title as string | null) ?? null,
-      source: r.source as string,
-      heading: (r.heading as string | null) ?? null,
-      snippet: (r.content as string).slice(0, 1200),
-      similarity: Number(r.similarity),
-    }));
+    // `as string` is a compile-time claim, not a runtime guarantee: one NULL
+    // content row used to throw and collapse the whole retrieval into
+    // { error }, discarding 23 good candidates. Drop the bad row instead.
+    return rows
+      .filter((r) => typeof r.content === "string" && r.source_url)
+      .map((r) => ({
+        url: r.source_url as string,
+        title: (r.title as string | null) ?? null,
+        source: r.source as string,
+        heading: (r.heading as string | null) ?? null,
+        snippet: (r.content as string).slice(0, 1200),
+        similarity: Number(r.similarity),
+      }));
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
@@ -149,7 +154,11 @@ export async function getPage(sourceUrl: string): Promise<WikiPage | ToolError> 
   }
 }
 
-export async function recentChanges(days = 14): Promise<RecentChange[] | ToolError> {
+// 30, matching the tool description the model reads. At 14 the model omitted
+// the argument for "what shipped recently?", silently got half the window,
+// and answered as though it had seen a month — a wrong-answer bug in a
+// product whose whole claim is grounded citation.
+export async function recentChanges(days = 30): Promise<RecentChange[] | ToolError> {
   try {
     // fetched_at only advances when a page's content hash changed — so this
     // IS the change feed, not a crawl log.

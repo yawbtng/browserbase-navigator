@@ -115,6 +115,13 @@ export async function liveFetch(
     // and deliberately do NOT escalate to a browser session here (this is an
     // anonymous public endpoint; run_showcase is the only session-spawner).
     const trimmed = markdown.trim();
+    // Status FIRST: most error pages are under 200 chars, so the JS-shell
+    // heuristic below used to swallow every 404/500 and tell the model the
+    // page "requires JavaScript" and to never retry it — the wrong root
+    // cause, and permanent for a URL that might be transiently 5xx.
+    if (res.statusCode >= 400) {
+      return { error: `upstream returned HTTP ${res.statusCode} for ${url}` };
+    }
     if (
       trimmed.length < 200 ||
       (trimmed.length < 2_000 &&
@@ -124,9 +131,6 @@ export async function liveFetch(
         error:
           "page requires JavaScript to render — content unavailable via live_fetch; do not retry this URL, answer from search result titles or say the page could not be read",
       };
-    }
-    if (res.statusCode >= 400) {
-      return { error: `upstream returned HTTP ${res.statusCode} for ${url}` };
     }
     return {
       url,

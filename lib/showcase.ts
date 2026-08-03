@@ -141,11 +141,42 @@ async function searchCatalogRelaxed(
     .map(([url]) => url);
 }
 
+/**
+ * The identifying tail of a ref. Models invent plausible-but-uncatalogued
+ * paths ("github.com/browserbase/examples/tree/main/stagehand/amazon-product-
+ * scraping", seen in prod 2026-08-02) where every part is wrong EXCEPT the
+ * last segment — which is the template's actual name. Searching that slug is
+ * still precise: it's the entry's name, not a lucky one-word overlap.
+ */
+function refTail(ref: string): string | null {
+  const segments = ref
+    .replace(/^https?:\/\//, "")
+    .split(/[/#?]/)
+    .filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const seg = segments[i]!.toLowerCase().replace(/\.(md|ts|js|py|tsx)$/, "");
+    // Skip path scaffolding — it identifies a location, not an entry.
+    if (
+      seg.length >= 4 &&
+      !STOP_WORDS.has(seg) &&
+      !/^(tree|blob|src|typescript|python|node|examples?|refs|heads)$/.test(seg)
+    ) {
+      return seg;
+    }
+  }
+  return null;
+}
+
 /** Did-you-mean candidates for the tool error, so the model can retry. */
 export async function suggestShowcaseRefs(ref: string): Promise<string[]> {
   try {
     const strict = await searchCatalogStrict(ref, 3);
     if (strict.length > 0) return strict;
+    const tail = refTail(ref);
+    if (tail) {
+      const byTail = await searchCatalogStrict(tail, 3);
+      if (byTail.length > 0) return byTail;
+    }
     return await searchCatalogRelaxed(ref, 3);
   } catch {
     return [];
@@ -217,11 +248,14 @@ export async function resolveShowcaseRef(
     }
   }
 
-  // Last rung: STRICT catalog search over the ref's words ("amazon product
-  // scraping" → the matching template page). Relaxed matching is deliberately
-  // suggestion-only — never auto-run a demo the user didn't name.
-  const fuzzy = await searchCatalogStrict(ref, 1);
-  if (fuzzy[0]) {
+  // Last rungs: STRICT catalog search over the ref's words ("amazon product
+  // scraping" → the matching template page), then over its identifying tail
+  // segment for invented paths. Relaxed matching stays suggestion-only —
+  // never auto-run a demo the user didn't name.
+  const tail = refTail(ref);
+  for (const term of tail ? [ref, tail] : [ref]) {
+    const fuzzy = await searchCatalogStrict(term, 1);
+    if (!fuzzy[0]) continue;
     const page = await getPage(fuzzy[0]);
     if (!("error" in page)) {
       return {

@@ -351,6 +351,40 @@ export async function startShowcase(
   };
 }
 
+/**
+ * Guarantee the browser session actually ends.
+ *
+ * stagehand.close() does release a non-keepAlive session (verified: demo
+ * sessions end at ~31s, well inside the 120s timeout), but "usually" isn't
+ * good enough here — a session left running bills browser minutes and holds
+ * one of the account's concurrency slots until the server-side timeout, and
+ * close() is documented NOT to release keepAlive sessions, so a future config
+ * change could silently start leaking. Verify, and force-release if needed.
+ */
+export async function endSession(
+  stagehand: Stagehand,
+  sessionId: string,
+): Promise<void> {
+  await stagehand.close().catch(() => {});
+  try {
+    const Browserbase = (await import("@browserbasehq/sdk")).default;
+    const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
+    const session = await bb.sessions.retrieve(sessionId);
+    if (session.status === "RUNNING") {
+      await bb.sessions.update(sessionId, {
+        projectId: process.env.BROWSERBASE_PROJECT_ID!,
+        status: "REQUEST_RELEASE",
+      });
+      console.warn(
+        `showcase: ${sessionId} still RUNNING after close() — requested release`,
+      );
+    }
+  } catch (err) {
+    // Never let cleanup bookkeeping throw out of a finally block.
+    console.error(`showcase: release check failed for ${sessionId}`, err);
+  }
+}
+
 async function logStep(
   sessionId: string,
   step: { tool: string; input: string; ok: boolean; note?: string },
@@ -474,7 +508,7 @@ export async function runShowcaseAgent(
   } catch {
     failed = true;
   } finally {
-    await stagehand.close().catch(() => {});
+    await endSession(stagehand, sessionId);
     const client = sql();
     await client`
       update showcase_runs

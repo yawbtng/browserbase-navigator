@@ -34,21 +34,25 @@ export async function GET(
     return Response.json({ status: "pending" });
   }
 
-  const limit = await checkRateLimit(requestIp(req), "download", 20, 60);
-  if (!limit.allowed) {
-    return Response.json({ status: "unavailable" });
-  }
-
   const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
   try {
     const { downloads } = await bb.sessions.recording.downloads.list(sessionId);
 
-    // Nothing enqueued yet (or a page failed) — request assembly once, then
-    // report pending; the client polls this same route.
+    // Nothing enqueued yet — request assembly, then report pending; the
+    // client polls this same route. Only NOT_REQUESTED re-enters this branch:
+    // retrying on FAILED would re-POST on every poll of a permanently broken
+    // page, which is exactly the 5/min enqueue limit this guard exists for.
     if (
       downloads.length === 0 ||
-      downloads.every((d) => d.status === "NOT_REQUESTED" || d.status === "FAILED")
+      downloads.every((d) => d.status === "NOT_REQUESTED")
     ) {
+      // Rate-limit the ENQUEUE, not the poll. Limiting every poll let one
+      // slow assembly (up to 20 polls) burn the whole hourly budget and then
+      // read as "no recording exists" to the next caller.
+      const limit = await checkRateLimit(requestIp(req), "download", 10, 60);
+      if (!limit.allowed) {
+        return Response.json({ status: "denied" });
+      }
       await bb.sessions.recording.downloads.create(sessionId);
       return Response.json({ status: "pending" });
     }

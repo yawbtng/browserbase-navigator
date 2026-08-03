@@ -82,14 +82,22 @@ export function ShowcaseArtifact({
     return data;
   }, [sessionId]);
 
-  // Live phase: poll the step ticker; flip to replay when the run closes.
+  // Poll the run row until it settles. Deliberately NOT gated on phase: the
+  // live view posts "browserbase-disconnected" the moment the browser closes,
+  // which is the FIRST thing session teardown does — the runner still has to
+  // release the session and write its result. A phase-gated poll stopped
+  // watching at exactly that moment and captured `running`/`result: null`,
+  // so the summary and extracted JSON never rendered at all.
+  const settled = run !== null && run.status !== "running";
   useEffect(() => {
-    if (phase !== "live") return;
+    if (settled || phase === "expired") return;
     let cancelled = false;
     const tick = async () => {
       const data = await fetchStatus();
+      // Status and result are written in one UPDATE, so a terminal status
+      // guarantees the payload came with it.
       if (!cancelled && data && data.status !== "running") {
-        setPhase("replay-loading");
+        setPhase((current) => (current === "live" ? "replay-loading" : current));
       }
     };
     void tick();
@@ -98,13 +106,16 @@ export function ShowcaseArtifact({
       cancelled = true;
       clearInterval(id);
     };
-  }, [phase, fetchStatus]);
+  }, [settled, phase, fetchStatus]);
 
   // The live view posts "browserbase-disconnected" the moment the session
   // ends — faster than the next poll.
   useEffect(() => {
     if (phase !== "live") return;
     const onMessage = (e: MessageEvent) => {
+      // Only the embedded Browserbase live view may drive this transition;
+      // any frame with a handle on this window can post a message.
+      if (!e.origin.endsWith("browserbase.com")) return;
       if (e.data === "browserbase-disconnected") setPhase("replay-loading");
     };
     window.addEventListener("message", onMessage);
@@ -122,7 +133,10 @@ export function ShowcaseArtifact({
       if (cancelled) return;
       if (res.status === 202) {
         replayTriesRef.current += 1;
-        if (replayTriesRef.current > 6) {
+        // ~110s of patience (2s, 4s, … 20s). Browserbase needs a while to
+        // process a recording; 6 tries (~42s) declared demos dead that were
+        // merely still encoding.
+        if (replayTriesRef.current > 10) {
           setPhase("expired");
           return;
         }
@@ -136,11 +150,10 @@ export function ShowcaseArtifact({
       setPhase("replay");
     };
     void attempt();
-    void fetchStatus();
     return () => {
       cancelled = true;
     };
-  }, [phase, sessionId, fetchStatus]);
+  }, [phase, sessionId]);
 
   useEffect(() => {
     if (phase !== "replay") return;
@@ -181,12 +194,21 @@ export function ShowcaseArtifact({
         cache: "no-store",
       });
       if (!res.ok) break;
-      const data = (await res.json()) as { status: Mp4 | "pending"; url?: string };
+      const data = (await res.json()) as {
+        status: Mp4 | "pending" | "denied";
+        url?: string;
+      };
       if (data.status === "ready" && data.url) {
         setMp4Url(data.url);
         setMp4("ready");
         // Best-effort auto-save; the link stays visible either way.
         requestAnimationFrame(() => saveRef.current?.click());
+        return;
+      }
+      // Throttled, not absent: fall back to idle so the button stays usable
+      // instead of latching to a permanent "No MP4".
+      if (data.status === "denied") {
+        setMp4("idle");
         return;
       }
       if (data.status === "unavailable") break;
@@ -289,15 +311,24 @@ export function ShowcaseArtifact({
         )}
         {phase === "expired" && (
           <p className="text-sm text-text-muted">
-            This demo&apos;s session has expired.{" "}
-            <a
-              className="font-medium text-brand-text underline"
-              href={sourceUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              Read the playbook instead.
-            </a>
+            {/* A run that finished still has its steps, summary and extracted
+                data below — only the video is missing, so don't tell the user
+                the demo expired when it plainly did not. */}
+            {settled ? (
+              "The video for this demo isn't available, but its results are below."
+            ) : (
+              <>
+                This demo&apos;s session has expired.{" "}
+                <a
+                  className="font-medium text-brand-text underline"
+                  href={sourceUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Read the playbook instead.
+                </a>
+              </>
+            )}
           </p>
         )}
 

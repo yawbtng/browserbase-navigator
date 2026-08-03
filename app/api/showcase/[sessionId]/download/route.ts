@@ -41,7 +41,7 @@ export async function GET(
 
   const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
   try {
-    let { downloads } = await bb.sessions.recording.downloads.list(sessionId);
+    const { downloads } = await bb.sessions.recording.downloads.list(sessionId);
 
     // Nothing enqueued yet (or a page failed) — request assembly once, then
     // report pending; the client polls this same route.

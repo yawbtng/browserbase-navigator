@@ -440,9 +440,16 @@ export async function runShowcaseAgent(
     extractions: Array<{ instruction: string; data: unknown }>;
   } = { summary: null, extracted: null, extractions: [] };
 
+  // Promise.race only ABANDONS the loser; without a signal the agent loop
+  // would keep running past the deadline — issuing act/extract calls against
+  // a browser the finally block had already closed, and appending steps to a
+  // row already marked finished.
+  const abort = new AbortController();
+
   const run = async () => {
     await generateText({
       model: SHOWCASE_MODEL,
+      abortSignal: abort.signal,
       temperature: 0.2,
       // 6 was too tight: real playbooks spend steps on goto + waits + two
       // extracts and hit the cap before calling finish, so runs landed with
@@ -520,16 +527,25 @@ export async function runShowcaseAgent(
   };
 
   let failed = false;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
       run(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("demo deadline")), AGENT_DEADLINE_MS),
-      ),
+      new Promise<never>((_, reject) => {
+        deadline = setTimeout(
+          () => reject(new Error("demo deadline")),
+          AGENT_DEADLINE_MS,
+        );
+      }),
     ]);
   } catch {
     failed = true;
   } finally {
+    // Stop the agent loop and drop the timer: demos finish in ~30s, so an
+    // uncleared 90s timer kept the instance from suspending for a minute
+    // after every successful run.
+    abort.abort();
+    clearTimeout(deadline);
     await endSession(stagehand, sessionId);
     const client = sql();
     await client`

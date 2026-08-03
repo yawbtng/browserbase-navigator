@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { sql } from "@/lib/wiki";
 
 /**
@@ -28,9 +29,14 @@ export async function GET(
   const startedMs = new Date(run.created_at as string).getTime();
   if (status === "running" && Date.now() - startedMs > 3 * 60_000) {
     status = "failed";
-    void sql()`
-      update showcase_runs set status = 'failed', updated_at = now()
-      where session_id = ${sessionId} and status = 'running'`.catch(() => {});
+    // after(), not a bare void: this route returns a small JSON body and the
+    // instance can be frozen the moment it does, so a fire-and-forget UPDATE
+    // might never flush and the "self-heal" would never actually heal.
+    after(async () => {
+      await sql()`
+        update showcase_runs set status = 'failed', updated_at = now()
+        where session_id = ${sessionId} and status = 'running'`.catch(() => {});
+    });
   }
 
   return Response.json(

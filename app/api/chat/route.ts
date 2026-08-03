@@ -387,15 +387,18 @@ export async function POST(req: Request) {
                   .describe("Web search query"),
               }),
               execute: async ({ query }) => {
-                const [perIp, global] = await Promise.all([
-                  checkRateLimit(ip, "live", LIVE_LIMIT_PER_HOUR, 60),
-                  checkRateLimit(
-                    "global",
-                    "live-search-global",
-                    LIVE_SEARCH_GLOBAL_PER_DAY,
-                    24 * 60,
-                  ),
-                ]);
+                // Global first, sequential: checkRateLimit records on every
+                // allowed check, so running both in parallel charged the
+                // caller's 8/hr even when the daily global did the refusing.
+                const global = await checkRateLimit(
+                  "global",
+                  "live-search-global",
+                  LIVE_SEARCH_GLOBAL_PER_DAY,
+                  24 * 60,
+                );
+                const perIp = global.allowed
+                  ? await checkRateLimit(ip, "live", LIVE_LIMIT_PER_HOUR, 60)
+                  : { allowed: false, remaining: 0 };
                 if (!perIp.allowed || !global.allowed) {
                   return {
                     error:
@@ -415,15 +418,16 @@ export async function POST(req: Request) {
                 if (!/^https?:\/\//i.test(url)) {
                   return { error: "only http(s) URLs can be fetched" };
                 }
-                const [perIp, global] = await Promise.all([
-                  checkRateLimit(ip, "live", LIVE_LIMIT_PER_HOUR, 60),
-                  checkRateLimit(
-                    "global",
-                    "live-fetch-global",
-                    LIVE_FETCH_GLOBAL_PER_DAY,
-                    24 * 60,
-                  ),
-                ]);
+                // Global first, sequential — see live_search above.
+                const global = await checkRateLimit(
+                  "global",
+                  "live-fetch-global",
+                  LIVE_FETCH_GLOBAL_PER_DAY,
+                  24 * 60,
+                );
+                const perIp = global.allowed
+                  ? await checkRateLimit(ip, "live", LIVE_LIMIT_PER_HOUR, 60)
+                  : { allowed: false, remaining: 0 };
                 if (!perIp.allowed || !global.allowed) {
                   return {
                     error:

@@ -280,17 +280,11 @@ export async function startShowcase(
   ref: string,
   ip: string,
 ): Promise<(ShowcaseStart & { handle: Stagehand }) | ToolError> {
-  const [perIp, global] = await Promise.all([
-    checkRateLimit(ip, "showcase", SHOWCASE_LIMIT_PER_HOUR, 60),
-    checkRateLimit("global", "showcase-global", SHOWCASE_GLOBAL_PER_DAY, 24 * 60),
-  ]);
-  if (!perIp.allowed || !global.allowed) {
-    return {
-      error:
-        "demo budget reached — describe the playbook from the wiki instead and link its source page",
-    };
-  }
-
+  // Concurrency FIRST. checkRateLimit records an event on every allowed
+  // check, so running it before this guard charged the user's 6/hr and the
+  // 30/day for a "slots are busy" rejection they didn't cause and would
+  // retry seconds later — three unlucky retries cost half the hourly budget.
+  //
   // Account-wide session slots are shared with other projects; stay tiny.
   // The 3-minute horizon self-heals rows a crashed runner never closed.
   const running = await sql()`
@@ -299,6 +293,24 @@ export async function startShowcase(
   if ((running[0]?.n ?? 0) >= MAX_CONCURRENT_RUNS) {
     return {
       error: "demo slots are busy — try again in a couple of minutes",
+    };
+  }
+
+  // Global budget before per-IP, and sequential: a Promise.all charges the
+  // caller's hourly allowance even when the daily global is what refused.
+  const global = await checkRateLimit(
+    "global",
+    "showcase-global",
+    SHOWCASE_GLOBAL_PER_DAY,
+    24 * 60,
+  );
+  const perIp = global.allowed
+    ? await checkRateLimit(ip, "showcase", SHOWCASE_LIMIT_PER_HOUR, 60)
+    : { allowed: false, remaining: 0 };
+  if (!perIp.allowed || !global.allowed) {
+    return {
+      error:
+        "demo budget reached — describe the playbook from the wiki instead and link its source page",
     };
   }
 

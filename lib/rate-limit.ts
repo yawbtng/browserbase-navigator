@@ -33,9 +33,13 @@ export async function checkRateLimit(
   if (used >= limit) {
     return { allowed: false, remaining: 0 };
   }
-  // Fire-and-forget: the insert doesn't gate this request, and the streaming
-  // response keeps the function alive long enough for it to flush.
-  sql()`insert into rate_events (ip, kind) values (${ip}, ${kind})`.catch(
+  // Awaited, not fire-and-forget. The old comment ("the streaming response
+  // keeps the function alive long enough to flush") only held for /api/chat's
+  // streaming path — the 413 early-returns and the short-JSON showcase routes
+  // respond immediately, and a serverless instance is frozen once the
+  // response is sent, so those requests could go unmetered. Awaiting also
+  // narrows the check-then-insert window from a whole request to one query.
+  await sql()`insert into rate_events (ip, kind) values (${ip}, ${kind})`.catch(
     () => {},
   );
   return { allowed: true, remaining: limit - used - 1 };

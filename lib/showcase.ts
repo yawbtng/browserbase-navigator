@@ -16,8 +16,11 @@ import { getPage } from "./tools";
 import type { ToolError } from "./tools";
 import { sql } from "./wiki";
 
-const SHOWCASE_LIMIT_PER_HOUR = 2;
-const SHOWCASE_GLOBAL_PER_DAY = 10;
+// Room to actually demo: 2/hr locked a presenter out after two runs. The real
+// account protection is MAX_CONCURRENT_RUNS + the 120s session timeout, not a
+// tight hourly count.
+const SHOWCASE_LIMIT_PER_HOUR = 6;
+const SHOWCASE_GLOBAL_PER_DAY = 30;
 const MAX_CONCURRENT_RUNS = 2;
 // Sessions hard-timeout server-side; the agent gets a shorter deadline so
 // the replay always captures a clean close rather than a platform kill.

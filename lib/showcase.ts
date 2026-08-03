@@ -329,26 +329,36 @@ export async function startShowcase(
     return { error: "could not start a browser session — try again shortly" };
   }
 
-  const Browserbase = (await import("@browserbasehq/sdk")).default;
-  const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
-  const debug = await bb.sessions.debug(sessionId);
+  // Past init() we own a LIVE session. If anything below throws — the debug
+  // lookup, the insert — nothing else will ever release it: the runner is
+  // scheduled by the caller and never gets the handle. It would then bill
+  // browser minutes and hold one of two concurrency slots until the 120s
+  // server-side timeout. Release it before the error propagates.
+  try {
+    const Browserbase = (await import("@browserbasehq/sdk")).default;
+    const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
+    const debug = await bb.sessions.debug(sessionId);
 
-  await sql()`
-    insert into showcase_runs (session_id, ref, title)
-    values (${sessionId}, ${ref}, ${resolved.title})`;
-  // Opportunistic prune; fire-and-forget.
-  void sql()`delete from showcase_runs where created_at < now() - interval '7 days'`.catch(
-    () => {},
-  );
+    await sql()`
+      insert into showcase_runs (session_id, ref, title)
+      values (${sessionId}, ${ref}, ${resolved.title})`;
+    // Opportunistic prune; fire-and-forget.
+    void sql()`delete from showcase_runs where created_at < now() - interval '7 days'`.catch(
+      () => {},
+    );
 
-  return {
-    handle: stagehand,
-    sessionId,
-    liveViewUrl: debug.debuggerFullscreenUrl,
-    title: resolved.title,
-    sourceUrl: resolved.sourceUrl,
-    status: "running",
-  };
+    return {
+      handle: stagehand,
+      sessionId,
+      liveViewUrl: debug.debuggerFullscreenUrl,
+      title: resolved.title,
+      sourceUrl: resolved.sourceUrl,
+      status: "running",
+    };
+  } catch (err) {
+    await endSession(stagehand, sessionId);
+    throw err; // the route surfaces the real message as a tool error
+  }
 }
 
 /**

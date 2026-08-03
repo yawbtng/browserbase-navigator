@@ -72,7 +72,7 @@ export function RelatedQuestions({
   }
 
   return (
-    <div className="mt-5 flex flex-col gap-2">
+    <div className="animate-rise-fade mt-5 flex flex-col gap-2">
       <span className="eyebrow">Keep exploring</span>
       <div className="flex flex-col items-start gap-2">
         {questions.map((question) => (

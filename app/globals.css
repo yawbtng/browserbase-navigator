@@ -208,6 +208,34 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* DNA §5 entrances. Two primitives, one signature easing:
+     riseFade    — new content arriving in the conversation flow (~1rem travel)
+     blurScaleIn — results/tiles "resolving into focus" (blur + scale, ~0.22s)
+     Both use `both` fill so the element is never painted in its pre-state. */
+  @keyframes riseFade {
+    from { opacity: 0; transform: translateY(0.5rem); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes blurScaleIn {
+    from { opacity: 0; transform: scale(0.985); filter: blur(6px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+
+  .animate-rise-fade {
+    animation: riseFade 0.28s var(--ease) both;
+  }
+  .animate-blur-scale-in {
+    animation: blurScaleIn 0.22s var(--ease) both;
+  }
+
+  /* Streaming markdown: each block animates ONCE, as it mounts. React reuses
+     existing DOM nodes across token re-renders, so only genuinely new blocks
+     (a fresh paragraph, list, heading) get the entrance — the growing block
+     stays put instead of re-firing on every token. */
+  .stream-in > * {
+    animation: riseFade 0.3s var(--ease) both;
+  }
+
   /* Global reduced-motion kill switch — DNA §5. Covers Framer/Radix/Tailwind entrances + Shimmer loop. */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {

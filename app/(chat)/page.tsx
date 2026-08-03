@@ -78,10 +78,12 @@ function TextWithCitations({
   text,
   sources,
   onOpenSource,
+  className,
 }: {
   text: string;
   sources: CitedSource[];
   onOpenSource: (url: string) => void;
+  className?: string;
 }) {
   // Rewrite to [1](url) — digit-only link text. The earlier [[1]](url) form
   // nests brackets, which CommonMark can parse as a reference-link shortcut
@@ -100,7 +102,10 @@ function TextWithCitations({
   );
   return (
     <CitationSourcesProvider value={citationContext}>
-      <MessageResponse components={citationMarkdownComponents}>
+      <MessageResponse
+        className={className}
+        components={citationMarkdownComponents}
+      >
         {linked}
       </MessageResponse>
     </CitationSourcesProvider>
@@ -323,7 +328,11 @@ function ChatSession({
                     <Message from={message.role}>
                       <MessageContent>
                         {isAssistant ? (
+                          // stream-in animates each markdown block once, as
+                          // it mounts — the answer resolves paragraph by
+                          // paragraph instead of snapping in mid-sentence.
                           <TextWithCitations
+                            className="stream-in"
                             onOpenSource={setPreviewUrl}
                             sources={sources}
                             text={body}
@@ -368,13 +377,18 @@ function ChatSession({
             <PromptInput onSubmit={handleSubmit}>
               <PromptInputBody>
                 <PromptInputTextarea
-                  className="min-h-13 px-4 py-3.5 pr-14 leading-normal"
+                  className="min-h-13 px-4 py-3.5 leading-normal"
                   onChange={(e) => setInput(e.currentTarget.value)}
                   placeholder="Ask about Stagehand, the browse CLI, MCP server…"
                   value={input}
                 />
+                {/* In flow, not absolute: the button reserves its own space
+                    so it can never overlap the text or clip against the
+                    group's rounded edge. mb-2.5 centers it on a single-line
+                    composer (52px group − 32px button) and keeps it
+                    bottom-anchored once the textarea grows. */}
                 <PromptInputSubmit
-                  className="absolute right-2 bottom-2"
+                  className="mr-2 mb-2.5 shrink-0"
                   disabled={!input.trim()}
                   status={status}
                 />

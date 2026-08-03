@@ -29,6 +29,16 @@ const SHOWCASE_MODEL =
   process.env.AI_MODEL ??
   "anthropic/claude-haiku-4.5";
 
+/**
+ * The model Stagehand uses for act/extract INSIDE the session (distinct from
+ * SHOWCASE_MODEL, which drives our outer tool-loop). "auto" is Browserbase's
+ * Model Router: selection happens server-side per call, matching each one to
+ * the cheapest model that can handle it. It requires env:"BROWSERBASE" and
+ * has NO local fallback — init() throws if the Stagehand API is unreachable —
+ * so it stays env-overridable to pin a concrete model without a deploy.
+ */
+const SHOWCASE_BROWSER_MODEL = process.env.SHOWCASE_BROWSER_MODEL ?? "auto";
+
 export interface ResolvedRef {
   title: string;
   sourceUrl: string;
@@ -262,6 +272,9 @@ export async function startShowcase(
     env: "BROWSERBASE",
     apiKey: process.env.BROWSERBASE_API_KEY,
     projectId: process.env.BROWSERBASE_PROJECT_ID,
+    // Model Router: no provider key, no pinned model — Browserbase picks per
+    // call through the Model Gateway (the BB API key is the only credential).
+    model: SHOWCASE_BROWSER_MODEL,
     // Pino's worker-thread transport can't resolve its file target inside a
     // Vercel function bundle ("unable to determine transport target") — the
     // Stagehand Vercel guide prescribes disabling it. Found via our own
@@ -326,16 +339,22 @@ export async function runShowcaseAgent(
 ): Promise<void> {
   // Holder object: the tool closures assign these; a bare `let` gets
   // flow-narrowed to its initial null and the finally block won't typecheck.
-  const state: { summary: string | null; extracted: unknown } = {
-    summary: null,
-    extracted: null,
-  };
+  // `extractions` keeps EVERY extract (a demo often extracts twice — listings
+  // then details); the card renders them as the demo's actual payload.
+  const state: {
+    summary: string | null;
+    extracted: unknown;
+    extractions: Array<{ instruction: string; data: unknown }>;
+  } = { summary: null, extracted: null, extractions: [] };
 
   const run = async () => {
     await generateText({
       model: SHOWCASE_MODEL,
       temperature: 0.2,
-      stopWhen: stepCountIs(6),
+      // 6 was too tight: real playbooks spend steps on goto + waits + two
+      // extracts and hit the cap before calling finish, so runs landed with
+      // no summary (seen on the Airbnb listings demo, 2026-08-02).
+      stopWhen: stepCountIs(8),
       system: [
         "You are demonstrating a Browserbase playbook in a live browser for an audience watching the screen.",
         "Follow the playbook's workflow below. Keep it to a handful of clear steps.",
@@ -385,6 +404,7 @@ export async function runShowcaseAgent(
             try {
               const data = await stagehand.extract(instruction);
               state.extracted = data;
+              state.extractions.push({ instruction, data });
               await logStep(sessionId, { tool: "extract", input: instruction, ok: true });
               return JSON.stringify(data).slice(0, 2_000);
             } catch (err) {
@@ -421,12 +441,17 @@ export async function runShowcaseAgent(
     const client = sql();
     await client`
       update showcase_runs
-      set status = ${failed && !state.summary ? "failed" : "finished"},
+      set status = ${
+        failed && !state.summary && state.extractions.length === 0
+          ? "failed"
+          : "finished"
+      },
           result = ${client.json({
             summary: state.summary,
-            // extract() output arrived over the wire as JSON, so the cast
-            // is safe — the driver just needs the type promise.
+            // extract() output arrived over the wire as JSON, so the casts
+            // are safe — the driver just needs the type promise.
             extracted: (state.extracted ?? null) as import("postgres").JSONValue,
+            extractions: state.extractions as import("postgres").JSONValue,
           })},
           updated_at = now()
       where session_id = ${sessionId}`.catch(() => {});

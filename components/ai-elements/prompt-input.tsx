@@ -924,7 +924,14 @@ export const PromptInput = ({
         {/* Dark (vercel/chatbot idiom): the composer is a rounded surface-2
             fill with NO resting border — definition comes from fill contrast
             + the focus ring. Light keeps its calibrated bordered field. */}
-        <InputGroup className="overflow-hidden border-transparent bg-surface-2 dark:bg-surface-2 light:border-input light:bg-transparent light:dark:bg-input/30">
+        {/* h-auto items-end is NOT redundant with InputGroup's own
+            has-[>textarea]:h-auto: PromptInputBody renders display:contents,
+            which drops its box from rendering but keeps it in the DOM — so
+            `:has(> textarea)` never matches and the group stayed pinned at
+            h-9 (36px) around a 52px textarea, clipping the submit button
+            against overflow-hidden. items-end bottom-anchors the button as
+            the textarea grows. */}
+        <InputGroup className="h-auto items-end overflow-hidden border-transparent bg-surface-2 dark:bg-surface-2 light:border-input light:bg-transparent light:dark:bg-input/30">
           {children}
         </InputGroup>
       </form>

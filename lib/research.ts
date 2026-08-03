@@ -93,7 +93,7 @@ async function runSubAgent(
       grep: tool({
         description:
           "Case-insensitive regex over the domain corpus — identifiers, flags, error strings",
-        inputSchema: z.object({ pattern: z.string() }),
+        inputSchema: z.object({ pattern: z.string().max(200) }),
         execute: ({ pattern }) => grepWiki(pattern, source),
       }),
       read_page: tool({

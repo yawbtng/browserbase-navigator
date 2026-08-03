@@ -15,7 +15,15 @@ export function sql(): ReturnType<typeof postgres> {
   if (client) return client;
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL not configured");
-  client = postgres(url, { ssl: "require", max: 2, idle_timeout: 20 });
+  client = postgres(url, {
+    ssl: "require",
+    max: 2,
+    idle_timeout: 20,
+    // grep_wiki runs a caller-influenced regex in the database. Without a
+    // ceiling a pathological pattern pins a connection indefinitely, and at
+    // max: 2 that locks the whole instance out of Postgres.
+    connection: { statement_timeout: 15_000 },
+  });
   return client;
 }
 

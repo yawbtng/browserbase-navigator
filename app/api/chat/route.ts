@@ -293,8 +293,13 @@ export async function POST(req: Request) {
         description:
           "Regex/exact-match search over the wiki corpus (case-insensitive POSIX regex). Use for identifiers, method names, error messages, flags, version numbers — anywhere the exact string matters more than meaning. Complements search_wiki (semantic).",
         inputSchema: z.object({
+          // Capped: the pattern reaches Postgres's regex engine AND Node's,
+          // and a visitor can steer it ("grep the wiki for this regex: …").
+          // An unbounded nested-quantifier pattern backtracks catastrophically
+          // — in Node that blocks the whole instance's event loop.
           pattern: z
             .string()
+            .max(200)
             .describe("Case-insensitive regex, e.g. 'keepAlive' or 'REQUEST_RELEASE'"),
           source: sourceFilter,
         }),
